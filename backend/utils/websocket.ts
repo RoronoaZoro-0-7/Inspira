@@ -79,17 +79,17 @@ class ChatWebSocketServer {
           console.log(`No token provided, using test user ${profileId}`);
         }
 
-        this.clients.set(profileId, ws);
-        this.userConversations.set(profileId, new Set());
+  this.clients.set(profileId ?? '', ws);
+  this.userConversations.set(profileId ?? '', new Set());
 
-        console.log(`User ${profileId} connected to WebSocket (${isAuthenticated ? 'authenticated' : 'test user'})`);
+  console.log(`User ${profileId ?? ''} connected to WebSocket (${isAuthenticated ? 'authenticated' : 'test user'})`);
 
         // Send welcome message
         ws.send(JSON.stringify({
           type: 'welcome',
           data: { 
             message: 'Connected to chat server',
-            userId: profileId,
+            userId: profileId ?? '',
             isAuthenticated: isAuthenticated,
             timestamp: new Date().toISOString()
           }
@@ -98,7 +98,7 @@ class ChatWebSocketServer {
         // Send user's active conversations (if authenticated)
         if (isAuthenticated) {
           try {
-            const conversations = await this.getUserConversations(profileId);
+            const conversations = await this.getUserConversations(profileId ?? '');
             ws.send(JSON.stringify({
               type: 'conversations',
               data: conversations
@@ -121,8 +121,8 @@ class ChatWebSocketServer {
         ws.on('message', async (data: Buffer) => {
           try {
             const message: WebSocketMessage = JSON.parse(data.toString());
-            console.log(`Received message from ${profileId}:`, message);
-            await this.handleMessage(profileId, message, isAuthenticated);
+            console.log(`Received message from ${profileId ?? ''}:`, message);
+            await this.handleMessage(profileId ?? '', message, isAuthenticated);
           } catch (error) {
             console.error('Error handling WebSocket message:', error);
             ws.send(JSON.stringify({
@@ -133,15 +133,15 @@ class ChatWebSocketServer {
         });
 
         ws.on('close', () => {
-          this.clients.delete(profileId);
-          this.userConversations.delete(profileId);
-          console.log(`User ${profileId} disconnected from WebSocket`);
+          this.clients.delete(profileId ?? '');
+          this.userConversations.delete(profileId ?? '');
+          console.log(`User ${profileId ?? ''} disconnected from WebSocket`);
         });
 
         ws.on('error', (error) => {
-          console.error(`WebSocket error for user ${profileId}:`, error);
-          this.clients.delete(profileId);
-          this.userConversations.delete(profileId);
+          console.error(`WebSocket error for user ${profileId ?? ''}:`, error);
+          this.clients.delete(profileId ?? '');
+          this.userConversations.delete(profileId ?? '');
         });
 
       } catch (error) {
