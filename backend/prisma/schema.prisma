@@ -1,0 +1,232 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Use Postgres for transactions & constraints
+  url      = env("DATABASE_URL")
+}
+
+//
+// ============= Enums =============
+//
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum PostStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum CreditTxType {
+  STARTER_GRANT // initial credits on signup
+  POST_COST // cost to publish a question
+  HELPFUL_REWARD // reward to answerer
+  PURCHASE // user buys credits with fiat
+  ADJUSTMENT // admin/manual correction
+}
+
+//
+// ============= Models =============
+//
+
+model User {
+  id       String  @id @default(cuid())
+  email    String  @unique
+  name     String?
+  imageUrl String?
+  bio      String?
+
+  // Universal currency (do NOT trust this alone; enforce with CreditTransaction + transactions)
+  credits Int @default(0)
+
+  // Optional: simple tagging of expertise/interests for better feed/matching
+  expertiseTags String[] @default([]) // e.g., ["java", "oop", "photoshop"]
+  interestTags  String[] @default([])
+
+  role Role @default(USER)
+
+  posts          Post[]
+  comments       Comment[]
+  postUpvotes    PostUpvote[]
+  commentUpvotes CommentUpvote[]
+  helpfulMarks   HelpfulMark[]   @relation("MarkedBy") // marks performed by this user (as OP)
+
+  creditTxs CreditTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Category {
+  id   String @id @default(cuid())
+  slug String @unique // "coding", "design", etc.
+  name String
+
+  posts Post[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  title   String
+  content String // Markdown/serialized content
+  status  PostStatus @default(OPEN)
+
+  // Economy knobs (set once on creation)
+  postCost      Int @default(2) // credits charged to create post
+  helpfulReward Int @default(5) // credits transferred when marked helpful
+
+  // Optional denormalized pointer for quick reads
+  helpfulCommentId String? @unique // set once when resolved; ensures one helpful per post
+
+  comments    Comment[]
+  upvotes     PostUpvote[]
+  helpfulMark HelpfulMark? // 1:1 via postId unique in HelpfulMark
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  CreditTransaction CreditTransaction[]
+
+  @@index([authorId, createdAt])
+  @@index([status, createdAt])
+  @@index([categoryId, createdAt])
+}
+
+model Comment {
+  id String @id @default(cuid())
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  content String
+
+  // Self-relation for nested replies
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  upvotes    CommentUpvote[]
+  helpfulFor HelpfulMark? // if this comment was marked helpful for its post
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  CreditTransaction CreditTransaction[]
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentId])
+}
+
+//
+// One free upvote per (user, post)
+//
+model PostUpvote {
+  id     String @id @default(cuid())
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId]) // prevents duplicate upvotes
+  @@index([userId, createdAt])
+}
+
+//
+// One free upvote per (user, comment)
+//
+model CommentUpvote {
+  id        String  @id @default(cuid())
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([commentId, userId]) // prevents duplicate upvotes
+  @@index([userId, createdAt])
+}
+
+//
+// Exactly one helpful mark per post.
+// Enforce with unique(postId). App logic must also ensure only the post author can mark.
+// When created, you should atomically:
+// - transfer credits from post.author to comment.author (helpfulReward)
+// - set post.helpfulCommentId
+//
+model HelpfulMark {
+  id String @id @default(cuid())
+
+  postId String @unique
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  commentId String  @unique
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  markedById String // should equal post.authorId (enforce in app logic/SQL trigger if you want)
+  markedBy   User   @relation("MarkedBy", fields: [markedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([markedById, createdAt])
+}
+
+//
+// Immutable ledger of all credit changes.
+// Keep User.credits consistent by wrapping writes in transactions:
+// - Insert ledger row(s)
+// - Update User.credits deltas
+// - Optionally assert non-negative balance before commit
+//
+model CreditTransaction {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type         CreditTxType
+  delta        Int // + adds credits; - spends credits
+  balanceAfter Int? // optional snapshot for audits
+
+  // Optional references for traceability
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([postId])
+  @@index([commentId])
+}
