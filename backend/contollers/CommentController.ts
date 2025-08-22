@@ -207,10 +207,18 @@ export const upvoteComment = async (req: Request, res: Response) => {
         select: { authorId: true }
       });
       if (commentAuthor && commentAuthor.authorId) {
-        await prisma.profile.update({
+        // Get current credits to ensure proper increment
+        const currentProfile = await prisma.profile.findUnique({
           where: { id: commentAuthor.authorId },
-          data: { credits: { increment: 5 } }
+          select: { credits: true }
         });
+        
+        if (currentProfile) {
+          await prisma.profile.update({
+            where: { id: commentAuthor.authorId },
+            data: { credits: currentProfile.credits + 5 }
+          });
+        }
       }
 
       // Get updated upvote count
@@ -233,6 +241,27 @@ export const upvoteComment = async (req: Request, res: Response) => {
             }
           }
         });
+
+        // Decrement the comment author's credits by 5 (remove the credits that were given)
+        const commentAuthor = await prisma.comment.findUnique({
+          where: { id: commentId },
+          select: { authorId: true }
+        });
+        if (commentAuthor && commentAuthor.authorId) {
+          // Get current credits to prevent going below 0
+          const currentProfile = await prisma.profile.findUnique({
+            where: { id: commentAuthor.authorId },
+            select: { credits: true }
+          });
+          
+          if (currentProfile) {
+            const newCredits = Math.max(0, currentProfile.credits - 5);
+            await prisma.profile.update({
+              where: { id: commentAuthor.authorId },
+              data: { credits: newCredits }
+            });
+          }
+        }
 
         // Get updated upvote count
         const upvoteCount = await prisma.commentUpvote.count({
