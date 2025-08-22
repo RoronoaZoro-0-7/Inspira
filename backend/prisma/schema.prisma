@@ -33,34 +33,40 @@ enum CreditTxType {
 //
 
 model User {
-  id       String  @id @default(cuid())
-  email    String  @unique
-  name     String?
-  imageUrl String?
-  bio      String?
+  id      String @id @default(cuid())
+  clerkId String @unique
+  email   String @unique
+  role    Role   @default(USER)
 
-  // Universal currency (do NOT trust this alone; enforce with CreditTransaction + transactions)
-  credits Int @default(0)
-
-  // Optional: simple tagging of expertise/interests for better feed/matching
-  expertiseTags String[] @default([]) // e.g., ["java", "oop", "photoshop"]
-  interestTags  String[] @default([])
-
-  role Role @default(USER)
-
-  posts          Post[]
-  comments       Comment[]
-  postUpvotes    PostUpvote[]
-  commentUpvotes CommentUpvote[]
-  helpfulMarks   HelpfulMark[]   @relation("MarkedBy") // marks performed by this user (as OP)
-
-  creditTxs CreditTransaction[]
+  profile Profile?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([role])
   @@index([createdAt])
+}
+
+model Profile {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name     String?
+  imageUrl String?
+  bio      String?
+  credits  Int     @default(0)
+  expertiseTags String[] @default([])
+  interestTags  String[] @default([])
+
+  posts Post[]
+  comments       Comment[]
+  postUpvotes    PostUpvote[]
+  commentUpvotes CommentUpvote[]
+  helpfulMarks   HelpfulMark[]   @relation("MarkedBy")
+  creditTxs      CreditTransaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
@@ -82,8 +88,10 @@ model Post {
   categoryIds String[]
   categories Category[]
 
-  title   String
-  content String // Markdown/serialized content
+  title      String
+  content    String? // plain text content
+  imageUrls  String[] @default([]) // multiple image URLs
+  videoUrls  String[] @default([]) // multiple video URLs
 
   // Optional denormalized pointer for quick reads
   helpfulCommentIds String[] // can store multiple helpful comment IDs
@@ -97,7 +105,6 @@ model Post {
   CreditTransaction CreditTransaction[]
 
   @@index([authorId, createdAt])
-  // @@index([status, createdAt]) removed
   @@index([categoryId, createdAt])
 }
 
@@ -142,7 +149,7 @@ model PostUpvote {
 
   createdAt DateTime @default(now())
 
-  @@unique([postId, userId]) // prevents duplicate upvotes
+@@unique([postId, userId]) // prevents duplicate upvotes
   @@index([userId, createdAt])
 }
 
