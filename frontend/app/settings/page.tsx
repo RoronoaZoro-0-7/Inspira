@@ -1,4 +1,4 @@
-import { User, Bell, Shield, CreditCard, Palette, Globe } from "lucide-react"
+import { User, Shield, CreditCard, Palette, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -21,15 +21,12 @@ export default function SettingsPage() {
 
         {/* Settings Tabs */}
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex items-center gap-2">
-              <Bell className="h-4 w-4" />
-              Notifications
-            </TabsTrigger>
+
             <TabsTrigger value="privacy" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
               Privacy
@@ -101,67 +98,7 @@ export default function SettingsPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="notifications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-                <CardDescription>Choose what notifications you want to receive</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="upvotes">Upvotes on your content</Label>
-                      <p className="text-sm text-gray-500">Get notified when someone upvotes your posts or answers</p>
-                    </div>
-                    <Switch id="upvotes" defaultChecked />
-                  </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="helpful">Helpful marks</Label>
-                      <p className="text-sm text-gray-500">Get notified when your answer is marked as helpful</p>
-                    </div>
-                    <Switch id="helpful" defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="comments">New comments</Label>
-                      <p className="text-sm text-gray-500">Get notified when someone comments on your posts</p>
-                    </div>
-                    <Switch id="comments" defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="followers">New followers</Label>
-                      <p className="text-sm text-gray-500">Get notified when someone follows you</p>
-                    </div>
-                    <Switch id="followers" defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="messages">Direct messages</Label>
-                      <p className="text-sm text-gray-500">Get notified when you receive a direct message</p>
-                    </div>
-                    <Switch id="messages" defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="weekly">Weekly digest</Label>
-                      <p className="text-sm text-gray-500">Get a weekly summary of your activity and trending topics</p>
-                    </div>
-                    <Switch id="weekly" />
-                  </div>
-                </div>
-
-                <Button>Save Preferences</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="privacy" className="space-y-6">
             <Card>

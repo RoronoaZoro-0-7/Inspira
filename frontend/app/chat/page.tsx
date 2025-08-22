@@ -233,7 +233,7 @@ export default function ChatPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem>View Profile</DropdownMenuItem>
-                      <DropdownMenuItem>Mute Notifications</DropdownMenuItem>
+
                       <DropdownMenuItem>Block User</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

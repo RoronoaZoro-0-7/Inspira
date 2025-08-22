@@ -29,7 +29,6 @@ import {
   PenTool,
   TrendingUp,
   Zap,
-  Bell,
 } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import Link from "next/link"
@@ -74,17 +73,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/notifications">
-                    <Bell className="w-4 h-4" />
-                    Notifications
-                    <Badge variant="secondary" className="ml-auto text-xs bg-red-100 text-red-600">
-                      3
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link href="/create">
