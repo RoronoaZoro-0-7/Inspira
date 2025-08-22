@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../index';
+import { uploadFile, getPublicUrl } from '../utils/s3Client';
 
 // GET / - Home/landing page
 export const getHome = async (req: Request, res: Response) => {
@@ -123,13 +124,35 @@ export const createPost = async (req: Request, res: Response) => {
       });
     }
 
-    const { title, content, categoryIds, imageUrls, videoUrls } = req.body;
+    const { title, content, categoryIds } = req.body;
 
     if (!title || !content) {
       return res.status(400).json({ 
         error: "Bad request", 
         message: "Title and content are required" 
       });
+    }
+
+    // Handle file uploads (images/videos) from req.files (multer or similar)
+    const uploadedImageUrls: string[] = [];
+    const uploadedVideoUrls: string[] = [];
+
+    // Cast req.files for multer compatibility
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    if (files && Array.isArray(files['images'])) {
+      for (const file of files['images']) {
+        const key = `images/${Date.now()}_${file.originalname}`;
+        await uploadFile(key, file.buffer, file.mimetype);
+        uploadedImageUrls.push(getPublicUrl(key));
+      }
+    }
+
+    if (files && Array.isArray(files['videos'])) {
+      for (const file of files['videos']) {
+        const key = `videos/${Date.now()}_${file.originalname}`;
+        await uploadFile(key, file.buffer, file.mimetype);
+        uploadedVideoUrls.push(getPublicUrl(key));
+      }
     }
 
     const POST_COST = 5; // Credits required to create a post
@@ -155,8 +178,8 @@ export const createPost = async (req: Request, res: Response) => {
           title,
           content,
           categoryIds: categoryIds || [],
-          imageUrls: imageUrls || [],
-          videoUrls: videoUrls || [],
+          imageUrls: uploadedImageUrls,
+          videoUrls: uploadedVideoUrls,
           authorId: req.user.profile!.id
         },
         include: {
@@ -215,7 +238,6 @@ export const resolvePost = async (req: Request, res: Response) => {
 
     const { id } = req.params;
     const { commentId } = req.body;
-
     if (!commentId) {
       return res.status(400).json({ 
         error: "Bad request", 

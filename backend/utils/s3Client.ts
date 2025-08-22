@@ -1,3 +1,11 @@
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+const deleteFile = async (key: string): Promise<void> => {
+  const command = new DeleteObjectCommand({
+    Bucket: process.env.S3_BUCKET,
+    Key: key,
+  });
+  await s3.send(command);
+};
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -77,4 +85,4 @@ const uploadFile = async (
   await s3.send(command);
 };
 
-export { presign, s3, s3Public, uploadFile, getDownloadUrl, getPublicUrl };
+export { presign, s3, s3Public, uploadFile, getDownloadUrl, getPublicUrl, deleteFile };
