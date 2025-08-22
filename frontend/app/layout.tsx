@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist } from "next/font/google"
 import { Manrope } from "next/font/google"
 import { ClerkProvider } from "@clerk/nextjs"
+import { Toaster } from "sonner"
 import "./globals.css"
 
 const geist = Geist({
@@ -31,7 +32,10 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className={`${geist.variable} ${manrope.variable} antialiased`}>
-        <body>{children}</body>
+        <body>
+          {children}
+          <Toaster position="top-right" />
+        </body>
       </html>
     </ClerkProvider>
   )

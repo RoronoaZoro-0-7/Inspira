@@ -2,7 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +17,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Zap, Upload, X, AlertCircle, CheckCircle, Code, Palette, Briefcase, PenTool, TrendingUp } from "lucide-react"
 import Link from "next/link"
+import { postApi, userApi, type CreatePostData } from "@/lib/api"
+import { toast } from "sonner"
 
 const categories = [
   { value: "coding", label: "Coding", icon: Code },
@@ -44,15 +48,44 @@ const suggestedTags = [
 ]
 
 export default function CreatePostPage() {
+  const router = useRouter()
+  const { user, isSignedIn } = useUser()
+  
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [category, setCategory] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [userCredits, setUserCredits] = useState<number | null>(null)
+  const [isLoadingCredits, setIsLoadingCredits] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const userCredits = 125 // In real app, get from user context
   const postCost = 5
+
+  // Fetch user credits on component mount
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchUserCredits()
+    } else {
+      setIsLoadingCredits(false)
+    }
+  }, [isSignedIn])
+
+  const fetchUserCredits = async () => {
+    try {
+      setIsLoadingCredits(true)
+      const response = await userApi.getProfile()
+      if (response.success) {
+        setUserCredits(response.data.credits)
+      }
+    } catch (error) {
+      console.error('Error fetching user credits:', error)
+      setError('Failed to load user credits')
+    } finally {
+      setIsLoadingCredits(false)
+    }
+  }
 
   const handleAddTag = (tag: string) => {
     if (tag && !tags.includes(tag) && tags.length < 5) {
@@ -67,17 +100,87 @@ export default function CreatePostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (userCredits < postCost) return
+    
+    if (!isSignedIn) {
+      toast.error("Please sign in to create a post")
+      return
+    }
+
+    if (userCredits !== null && userCredits < postCost) {
+      toast.error(`You need at least ${postCost} credits to create a post`)
+      return
+    }
+
+    if (!canSubmit) {
+      toast.error("Please fill in all required fields")
+      return
+    }
 
     setIsSubmitting(true)
-    // In real app, submit to API
-    setTimeout(() => {
+    setError(null)
+
+    try {
+      const postData: CreatePostData = {
+        title: title.trim(),
+        content: content.trim(),
+        categoryIds: [category, ...tags], // Send category and tags as categoryIds array
+      }
+
+      const response = await postApi.create(postData)
+      
+      if (response.success) {
+        toast.success("Post created successfully!")
+        // Refresh user credits
+        await fetchUserCredits()
+        // Redirect to the new post
+        router.push(`/posts/${response.data.id}`)
+      } else {
+        throw new Error(response.message || 'Failed to create post')
+      }
+    } catch (error: any) {
+      console.error('Error creating post:', error)
+      const errorMessage = error.message || 'Failed to create post. Please try again.'
+      setError(errorMessage)
+      toast.error(errorMessage)
+    } finally {
       setIsSubmitting(false)
-      // Redirect to new post
-    }, 2000)
+    }
   }
 
-  const canSubmit = title.trim() && content.trim() && category && userCredits >= postCost
+  const canSubmit = title.trim() && content.trim() && category && 
+    (userCredits === null || userCredits >= postCost) && isSignedIn
+
+  // Show loading state while fetching credits
+  if (isLoadingCredits) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show sign-in prompt if not authenticated
+  if (!isSignedIn) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-muted mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Sign in to create a post</h2>
+            <p className="text-muted mb-4">You need to be signed in to create posts and interact with the community.</p>
+            <Button asChild>
+              <Link href="/sign-in">Sign In</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -92,8 +195,16 @@ export default function CreatePostPage() {
         </Button>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Credit Warning */}
-      {userCredits < postCost ? (
+      {userCredits !== null && userCredits < postCost ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -103,14 +214,14 @@ export default function CreatePostPage() {
             </Link>
           </AlertDescription>
         </Alert>
-      ) : (
+      ) : userCredits !== null ? (
         <Alert>
           <Zap className="h-4 w-4" />
           <AlertDescription>
             Creating a post costs {postCost} credits. You have {userCredits} credits available.
           </AlertDescription>
         </Alert>
-      )}
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
@@ -139,6 +250,7 @@ export default function CreatePostPage() {
                         onChange={(e) => setTitle(e.target.value)}
                         maxLength={200}
                         className="text-lg"
+                        disabled={isSubmitting}
                       />
                       <div className="flex justify-between text-sm text-muted">
                         <span>Be specific and clear about what you're asking</span>
@@ -149,7 +261,7 @@ export default function CreatePostPage() {
                     {/* Category */}
                     <div className="space-y-2">
                       <Label htmlFor="category">Category *</Label>
-                      <Select value={category} onValueChange={setCategory}>
+                      <Select value={category} onValueChange={setCategory} disabled={isSubmitting}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a category" />
                         </SelectTrigger>
@@ -175,6 +287,7 @@ export default function CreatePostPage() {
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
                         className="min-h-[300px] font-mono text-sm"
+                        disabled={isSubmitting}
                       />
                       <div className="flex justify-between text-sm text-muted">
                         <span>Use markdown for formatting. Be detailed and specific.</span>
@@ -193,6 +306,7 @@ export default function CreatePostPage() {
                               type="button"
                               onClick={() => handleRemoveTag(tag)}
                               className="ml-1 hover:text-destructive"
+                              disabled={isSubmitting}
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -211,12 +325,13 @@ export default function CreatePostPage() {
                             }
                           }}
                           maxLength={20}
+                          disabled={isSubmitting}
                         />
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => handleAddTag(newTag)}
-                          disabled={!newTag || tags.length >= 5}
+                          disabled={!newTag || tags.length >= 5 || isSubmitting}
                         >
                           Add
                         </Button>
@@ -233,7 +348,7 @@ export default function CreatePostPage() {
                               size="sm"
                               className="text-xs h-6"
                               onClick={() => handleAddTag(tag)}
-                              disabled={tags.length >= 5}
+                              disabled={tags.length >= 5 || isSubmitting}
                             >
                               {tag}
                             </Button>
@@ -249,7 +364,7 @@ export default function CreatePostPage() {
                         <Upload className="w-8 h-8 mx-auto text-muted mb-2" />
                         <p className="text-sm text-muted">
                           Drag and drop files here, or{" "}
-                          <button type="button" className="text-primary hover:underline">
+                          <button type="button" className="text-primary hover:underline" disabled={isSubmitting}>
                             browse
                           </button>
                         </p>
@@ -266,7 +381,7 @@ export default function CreatePostPage() {
                         <span>This post will cost {postCost} credits</span>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <Button type="button" variant="outline" asChild>
+                        <Button type="button" variant="outline" asChild disabled={isSubmitting}>
                           <Link href="/feed">Cancel</Link>
                         </Button>
                         <Button type="submit" disabled={!canSubmit || isSubmitting}>
@@ -353,12 +468,16 @@ export default function CreatePostPage() {
               </div>
               <div className="flex justify-between">
                 <span>Your balance:</span>
-                <span className="font-medium">{userCredits} credits</span>
+                <span className="font-medium">
+                  {userCredits !== null ? `${userCredits} credits` : 'Loading...'}
+                </span>
               </div>
               <Separator />
               <div className="flex justify-between">
                 <span>After posting:</span>
-                <span className="font-medium">{userCredits - postCost} credits</span>
+                <span className="font-medium">
+                  {userCredits !== null ? `${userCredits - postCost} credits` : '...'}
+                </span>
               </div>
               <div className="text-xs text-muted space-y-1">
                 <p>• Earn credits when your answers are marked helpful</p>
