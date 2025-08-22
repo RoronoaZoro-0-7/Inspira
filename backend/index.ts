@@ -5,13 +5,13 @@ import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { Webhook } from 'svix';
 import authMiddleware from "./middlewares/authMiddleware";
 import { PrismaClient } from "@prisma/client";
+import { deleteAccount } from "./contollers/AuthController";
 
 // Import routes
 import authRoutes from "./routes/auth";
 import postRoutes from "./routes/posts";
 import commentRoutes from "./routes/comments";
 import chatRoutes from "./routes/chat";
-import AuthController from "./contollers/AuthController";
 
 // Import WebSocket server
 import ChatWebSocketServer from "./utils/websocket";
@@ -132,7 +132,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
       return res.status(500).json({ error: 'Error syncing user' });
     }
   } else if (eventType === 'user.deleted') {
-    await AuthController.deleteAccount(req as any, res as any);
+    await deleteAccount(req as any, res as any);
   }
 
   res.status(200).json({ success: true });
