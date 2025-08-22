@@ -33,6 +33,8 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "prisma": "^6.14.0",
     "svix": "^1.74.1"
   }
 }

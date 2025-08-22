@@ -229,8 +229,8 @@ model CreditTransaction {
   @@index([type, createdAt])
   @@index([postId])
   @@index([commentId])
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> fe884b611201a1d3eafce54c260f7ca2d5ed00ec
+
+
+
+
