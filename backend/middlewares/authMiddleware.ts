@@ -1,36 +1,53 @@
-import { NextFunction, Request, Response } from "express";
-import { getAuth, User } from "@clerk/express";
+import { getAuth } from '@clerk/express';
+import { NextFunction, Request, Response } from 'express';
 import prisma from "../index";
 
-interface RequestWithUser extends Request {
-    user: User;
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
 }
 
-const authMiddleware = async function(req: RequestWithUser, res: Response, next: NextFunction): Promise<void> {
-
-    const user = getAuth(req as any);
-
-    if (!user) {
-        res.status(401).json({ message: "Unauthorized" });
-        return;
+const authMiddleware = async function(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = getAuth(req);
+    
+    if (!userId) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "No user ID found in request" 
+      });
     }
 
-    const clerkId = user.userId;
-
-    const dbUser = await prisma.user.findUnique({
-        where: {
-            clerkId: clerkId
-        }
+    const user = await prisma.user.findUnique({
+      where: {
+        clerkId: userId
+      },
+      include: {
+        profile: true
+      }
     });
 
-    if (!dbUser) {
-        res.status(401).json({ message: "Unauthorized" });
-        return;
+    if (!user) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User not found in database" 
+      });
     }
 
-    req.user = dbUser as User;
-
+    // Attach user to request object
+    req.user = user;
     next();
-}
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    return res.status(500).json({ 
+      error: "Internal server error", 
+      message: "Authentication failed" 
+    });
+  }
+};
 
 export default authMiddleware;
