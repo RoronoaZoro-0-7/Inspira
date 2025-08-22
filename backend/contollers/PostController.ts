@@ -126,6 +126,17 @@ export const createPost = async (req: Request, res: Response) => {
 
     const { title, content, categoryIds } = req.body;
 
+    // Resolve category tags to category IDs
+    const categoryNames = categoryIds || [];
+    const categoryIdsToStore: string[] = [];
+    for (const name of categoryNames) {
+      let category = await prisma.category.findUnique({ where: { slug: name } });
+      if (!category) {
+        category = await prisma.category.create({ data: { slug: name, name } });
+      }
+      categoryIdsToStore.push(category.id);
+    }
+
     if (!title || !content) {
       return res.status(400).json({
         error: "Bad request",
@@ -157,65 +168,58 @@ export const createPost = async (req: Request, res: Response) => {
 
     const POST_COST = 5; // Credits required to create a post
 
-    // Check if user has enough credits
+    // Fetch user profile and check for existence
     const userProfile = await prisma.profile.findUnique({
-      where: { userId: req.user.id },
-      select: { credits: true }
+      where: { userId: req.user.clerkId }
     });
-
-    if (!userProfile || userProfile.credits < POST_COST) {
-      return res.status(400).json({
-        error: "Insufficient credits",
-        message: `You need ${POST_COST} credits to create a post. You have ${userProfile?.credits || 0} credits.`
+    if (!userProfile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
       });
     }
 
-    // Create post and deduct credits in a transaction
-    const result = await prisma.$transaction(async (tx: any) => {
-      // Create the post
-      const post = await tx.post.create({
-        data: {
-          title,
-          content,
-          categoryIds: categoryIds || [],
-          imageUrls: uploadedImageUrls,
-          videoUrls: uploadedVideoUrls,
-          authorId: req.user.profile!.id
-        },
-        include: {
-          author: {
-            select: {
-              name: true,
-              imageUrl: true
-            }
-          },
-          categories: true
-        }
+    // Check if user has enough credits
+    if (userProfile.credits < POST_COST) {
+      return res.status(400).json({
+        error: "Insufficient credits",
+        message: `You need ${POST_COST} credits to create a post. You have ${userProfile.credits} credits.`
       });
+    }
 
-      // Deduct credits
-      await tx.profile.update({
-        where: { userId: req.user.id },
-        data: { credits: { decrement: POST_COST } }
-      });
-
-      // Record credit transaction
-      await tx.creditTransaction.create({
-        data: {
-          userId: req.user.profile!.id,
-          type: 'POST_COST',
-          delta: -POST_COST,
-          postId: post.id,
-          notes: `Created post: ${title}`
-        }
-      });
-
-      return post;
+    // Step 1: Create the post
+    const post = await prisma.post.create({
+      data: {
+        title,
+        content,
+        categoryIds: categoryIdsToStore,
+        imageUrls: uploadedImageUrls,
+        videoUrls: uploadedVideoUrls,
+        authorId: userProfile.id
+      }
     });
 
+    // Step 2: Deduct credits from the user's profile
+    await prisma.profile.update({
+      where: { userId: req.user.clerkId },
+      data: { credits: { decrement: POST_COST } }
+    });
+
+    // Step 3: Record the credit transaction
+    await prisma.creditTransaction.create({
+      data: {
+        userId: userProfile.id,
+        type: 'POST_COST',
+        delta: -POST_COST,
+        postId: post.id,
+        notes: `Created post: ${title}`
+      }
+    });
+
+    // Step 4: Return the created post
     res.status(201).json({
       success: true,
-      data: result
+      data: post
     });
   } catch (error) {
     console.error('Create post error:', error);
@@ -257,8 +261,12 @@ export const resolvePost = async (req: Request, res: Response) => {
         message: "Post not found"
       });
     }
-
-    if (post.authorId !== req.user.profile!.id) {
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
+    if (post.authorId !== profile.id) {
       return res.status(403).json({
         error: "Forbidden",
         message: "Only the post owner can mark comments as helpful"
@@ -302,7 +310,7 @@ export const resolvePost = async (req: Request, res: Response) => {
         data: {
           postId: id,
           commentId,
-          markedById: req.user.profile!.id
+          markedById: profile.id
         }
       });
 
@@ -322,7 +330,7 @@ export const resolvePost = async (req: Request, res: Response) => {
       await tx.creditTransaction.createMany({
         data: [
           {
-            userId: req.user.profile!.id,
+            userId: profile.id,
             type: 'HELPFUL_REWARD',
             delta: -HELPFUL_REWARD,
             postId: id,
@@ -379,13 +387,17 @@ export const upvotePost = async (req: Request, res: Response) => {
         message: "Post not found"
       });
     }
-
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
     // Try to create upvote (will fail if already exists due to unique constraint)
     try {
       const upvote = await prisma.postUpvote.create({
         data: {
           postId: id,
-          userId: req.user.profile!.id
+          userId: profile.id
         }
       });
 
@@ -400,7 +412,7 @@ export const upvotePost = async (req: Request, res: Response) => {
           where: {
             postId_userId: {
               postId: id,
-              userId: req.user.profile!.id
+              userId: profile.id
             }
           }
         });
