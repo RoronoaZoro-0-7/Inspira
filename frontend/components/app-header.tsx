@@ -14,13 +14,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, Zap, User, Settings, CreditCard, MessageSquare } from "lucide-react"
 import { useUser, SignOutButton } from "@clerk/nextjs"
+import { useCredits } from "@/contexts/CreditsContext"
 import Link from "next/link"
 
 export function AppHeader() {
   const { user, isSignedIn } = useUser()
-
-  // Mock credits data - in real app this would come from your database
-  const userCredits = 150
+  const { credits, loading } = useCredits()
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -42,7 +41,7 @@ export function AppHeader() {
               {/* Credits Display */}
               <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
                 <Zap className="w-3 h-3 mr-1" />
-                {userCredits}
+                {loading ? "..." : credits}
               </Badge>
 
               {/* Create Post Button */}

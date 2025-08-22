@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,8 @@ import { toast } from "sonner"
 import type { Post } from "@/lib/api"
 
 export default function FeedPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +27,14 @@ export default function FeedPage() {
   const [category, setCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+
+  // Get category from URL params on mount
+  useEffect(() => {
+    const categoryParam = searchParams.get('category')
+    if (categoryParam) {
+      setCategory(categoryParam)
+    }
+  }, [searchParams])
 
   // Debounce search query for better performance
   useEffect(() => {
@@ -39,7 +50,10 @@ export default function FeedPage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await postApi.getAll()
+      const response = await postApi.getAll({
+        category: category !== "all" ? category : undefined,
+        sort: sortBy as 'newest' | 'trending'
+      })
       if (response.success) {
         setPosts(response.data.posts || [])
       } else {
@@ -55,10 +69,22 @@ export default function FeedPage() {
     }
   }
 
-  // Fetch posts on component mount
+  // Fetch posts on component mount and when filters change
   useEffect(() => {
     fetchPosts()
-  }, [])
+  }, [category, sortBy])
+
+  // Update URL when category changes
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory)
+    const params = new URLSearchParams(searchParams.toString())
+    if (newCategory === 'all') {
+      params.delete('category')
+    } else {
+      params.set('category', newCategory)
+    }
+    router.push(`/feed?${params.toString()}`)
+  }
 
   // Format date to relative time
   const formatTimeAgo = (dateString: string) => {
@@ -73,42 +99,21 @@ export default function FeedPage() {
     return date.toLocaleDateString()
   }
 
-  // Filter and sort posts
-  const filteredAndSortedPosts = posts
-    .filter(post => {
-      // Search filter
-      if (debouncedSearchQuery.trim()) {
-        const query = debouncedSearchQuery.toLowerCase()
-        const matchesTitle = post.title.toLowerCase().includes(query)
-        const matchesContent = post.content.toLowerCase().includes(query)
-        const matchesAuthor = post.author.name.toLowerCase().includes(query)
-        const matchesCategory = post.categoryIds.some(cat => cat.toLowerCase().includes(query))
-        
-        if (!matchesTitle && !matchesContent && !matchesAuthor && !matchesCategory) {
-          return false
-        }
-      }
+  // Filter posts by search query (backend handles category and sort filtering)
+  const filteredPosts = posts.filter(post => {
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase()
+      const matchesTitle = post.title.toLowerCase().includes(query)
+      const matchesContent = post.content.toLowerCase().includes(query)
+      const matchesAuthor = post.author.name.toLowerCase().includes(query)
+      const matchesCategory = post.categories.some(cat => 
+        cat.name.toLowerCase().includes(query) || cat.slug.toLowerCase().includes(query)
+      )
       
-      // Category filter
-      if (category !== "all") {
-        // You can implement category filtering here when categories are available
-        return true
-      }
-      
-      return true
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        case "trending":
-          return b.upvotes - a.upvotes
-        case "most-upvotes":
-          return b.upvotes - a.upvotes
-        default:
-          return 0
-      }
-    })
+      return matchesTitle || matchesContent || matchesAuthor || matchesCategory
+    }
+    return true
+  })
 
   if (loading) {
     return (
@@ -205,7 +210,7 @@ export default function FeedPage() {
           </SelectContent>
         </Select>
 
-        <Select value={category} onValueChange={setCategory}>
+        <Select value={category} onValueChange={handleCategoryChange}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -226,57 +231,89 @@ export default function FeedPage() {
       </div>
 
       {/* Search Results Info */}
-      {debouncedSearchQuery.trim() && (
+      {(debouncedSearchQuery.trim() || category !== "all") && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted">
-            {filteredAndSortedPosts.length} result{filteredAndSortedPosts.length !== 1 ? 's' : ''} for "{debouncedSearchQuery}"
+            {filteredPosts.length} result{filteredPosts.length !== 1 ? 's' : ''}
+            {debouncedSearchQuery.trim() && ` for "${debouncedSearchQuery}"`}
+            {category !== "all" && ` in ${category.charAt(0).toUpperCase() + category.slice(1)}`}
           </p>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setSearchQuery("")}
-          >
-            Clear Search
-          </Button>
+          <div className="flex space-x-2">
+            {debouncedSearchQuery.trim() && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setSearchQuery("")}
+              >
+                Clear Search
+              </Button>
+            )}
+            {category !== "all" && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => handleCategoryChange("all")}
+              >
+                Clear Filter
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
       {/* Posts Feed */}
       <div className="space-y-4">
-        {filteredAndSortedPosts.length === 0 ? (
+        {filteredPosts.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-muted mb-4">
               {debouncedSearchQuery.trim() 
                 ? `No posts found for "${debouncedSearchQuery}"` 
+                : category !== "all"
+                ? `No posts found in ${category.charAt(0).toUpperCase() + category.slice(1)}`
                 : "No posts found"
               }
             </p>
-            {debouncedSearchQuery.trim() ? (
-              <Button 
-                variant="outline" 
-                onClick={() => setSearchQuery("")}
-                className="mr-2"
-              >
-                Clear Search
+            <div className="flex justify-center space-x-2">
+              {debouncedSearchQuery.trim() && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSearchQuery("")}
+                >
+                  Clear Search
+                </Button>
+              )}
+              {category !== "all" && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleCategoryChange("all")}
+                >
+                  Clear Filter
+                </Button>
+              )}
+              <Button asChild>
+                <Link href="/create">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create the first post
+                </Link>
               </Button>
-            ) : null}
-            <Button asChild>
-              <Link href="/create">
-                <Plus className="w-4 h-4 mr-2" />
-                Create the first post
-              </Link>
-            </Button>
+            </div>
           </div>
         ) : (
-          filteredAndSortedPosts.map((post) => (
+          filteredPosts.map((post) => (
             <Card key={post.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
-                      <Badge variant="secondary">
-                        {post.categoryIds.length > 0 ? post.categoryIds[0] : "General"}
-                      </Badge>
+                      {post.categories.length > 0 ? (
+                        post.categories.map((cat) => (
+                          <Badge key={cat.id} variant="secondary">
+                            {cat.name}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="secondary">General</Badge>
+                      )}
                       {post.isResolved && (
                         <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
                           <CheckCircle className="w-3 h-3 mr-1" />

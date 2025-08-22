@@ -8,11 +8,20 @@ export interface CreatePostData {
   categoryIds: string[]; // Backend expects categoryIds array
 }
 
+export interface Category {
+  id: string;
+  slug: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Post {
   id: string;
   title: string;
   content: string;
   categoryIds: string[];
+  categories: Category[];
   authorId: string;
   author: {
     name: string;
@@ -110,6 +119,20 @@ export const postApi = {
       method: 'POST',
     });
   },
+
+  async getCategoryCounts(): Promise<ApiResponse<{
+    categories: Array<{
+      name: string;
+      count: number;
+    }>;
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      categories: Array<{
+        name: string;
+        count: number;
+      }>;
+    }>>('/api/posts/categories');
+  },
 };
 
 // User API functions
@@ -154,6 +177,206 @@ export const userApi = {
         createdAt: string;
       }>;
     }>>('/api/auth/me/credits');
+  },
+};
+
+// Chat API functions
+export const chatApi = {
+  async getConversations(): Promise<ApiResponse<Array<{
+    id: string;
+    otherParticipant: {
+      id: string;
+      name: string;
+      imageUrl?: string;
+    };
+    lastMessage?: {
+      content: string;
+      createdAt: string;
+      senderId: string;
+    };
+    messageCount: number;
+    updatedAt: string;
+    createdAt: string;
+  }>>> {
+    return makeApiRequest<ApiResponse<Array<{
+      id: string;
+      otherParticipant: {
+        id: string;
+        name: string;
+        imageUrl?: string;
+      };
+      lastMessage?: {
+        content: string;
+        createdAt: string;
+        senderId: string;
+      };
+      messageCount: number;
+      updatedAt: string;
+      createdAt: string;
+    }>>>('/api/chat/conversations');
+  },
+
+  async getMessages(conversationId: string, page = 1, limit = 50): Promise<ApiResponse<{
+    messages: Array<{
+      id: string;
+      conversationId: string;
+      senderId: string;
+      content: string;
+      messageType: string;
+      fileUrl?: string;
+      createdAt: string;
+      isRead: boolean;
+      readAt?: string;
+      sender: {
+        id: string;
+        name: string;
+        imageUrl?: string;
+      };
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('page', page.toString());
+    searchParams.append('limit', limit.toString());
+    
+    return makeApiRequest<ApiResponse<{
+      messages: Array<{
+        id: string;
+        conversationId: string;
+        senderId: string;
+        content: string;
+        messageType: string;
+        fileUrl?: string;
+        createdAt: string;
+        isRead: boolean;
+        readAt?: string;
+        sender: {
+          id: string;
+          name: string;
+          imageUrl?: string;
+        };
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>>(`/api/chat/conversations/${conversationId}/messages?${searchParams.toString()}`);
+  },
+
+  async sendMessage(conversationId: string, content: string, messageType = 'TEXT', fileUrl?: string): Promise<ApiResponse<{
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    messageType: string;
+    fileUrl?: string;
+    createdAt: string;
+    sender: {
+      id: string;
+      name: string;
+      imageUrl?: string;
+    };
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      id: string;
+      conversationId: string;
+      senderId: string;
+      content: string;
+      messageType: string;
+      fileUrl?: string;
+      createdAt: string;
+      sender: {
+        id: string;
+        name: string;
+        imageUrl?: string;
+      };
+    }>>(`/api/chat/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, messageType, fileUrl }),
+    });
+  },
+
+  async createConversation(participantId: string): Promise<ApiResponse<{
+    id: string;
+    otherParticipant: {
+      id: string;
+      name: string;
+      imageUrl?: string;
+    };
+    lastMessage?: {
+      content: string;
+      createdAt: string;
+      senderId: string;
+    };
+    createdAt: string;
+    updatedAt: string;
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      id: string;
+      otherParticipant: {
+        id: string;
+        name: string;
+        imageUrl?: string;
+      };
+      lastMessage?: {
+        content: string;
+        createdAt: string;
+        senderId: string;
+      };
+      createdAt: string;
+      updatedAt: string;
+    }>>('/api/chat/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ participantId }),
+    });
+  },
+
+  async searchUsers(query: string, page = 1, limit = 20): Promise<ApiResponse<{
+    users: Array<{
+      id: string;
+      name: string;
+      imageUrl?: string;
+      bio?: string;
+      user: {
+        email: string;
+      };
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('q', query);
+    searchParams.append('page', page.toString());
+    searchParams.append('limit', limit.toString());
+    
+    return makeApiRequest<ApiResponse<{
+      users: Array<{
+        id: string;
+        name: string;
+        imageUrl?: string;
+        bio?: string;
+        user: {
+          email: string;
+        };
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>>(`/api/chat/users?${searchParams.toString()}`);
   },
 };
 

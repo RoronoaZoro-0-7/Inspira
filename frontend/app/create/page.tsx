@@ -17,7 +17,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Zap, Upload, X, AlertCircle, CheckCircle, Code, Palette, Briefcase, PenTool, TrendingUp } from "lucide-react"
 import Link from "next/link"
-import { postApi, userApi, type CreatePostData } from "@/lib/api"
+import { postApi, type CreatePostData } from "@/lib/api"
+import { useCredits } from "@/contexts/CreditsContext"
+import { useCategories } from "@/contexts/CategoriesContext"
 import { toast } from "sonner"
 
 const categories = [
@@ -50,6 +52,8 @@ const suggestedTags = [
 export default function CreatePostPage() {
   const router = useRouter()
   const { user, isSignedIn } = useUser()
+  const { credits, loading: isLoadingCredits, error: creditsError, refreshCredits } = useCredits()
+  const { refreshCategories } = useCategories()
   
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
@@ -57,35 +61,9 @@ export default function CreatePostPage() {
   const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [userCredits, setUserCredits] = useState<number | null>(null)
-  const [isLoadingCredits, setIsLoadingCredits] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const postCost = 5
-
-  // Fetch user credits on component mount
-  useEffect(() => {
-    if (isSignedIn) {
-      fetchUserCredits()
-    } else {
-      setIsLoadingCredits(false)
-    }
-  }, [isSignedIn])
-
-  const fetchUserCredits = async () => {
-    try {
-      setIsLoadingCredits(true)
-      const response = await userApi.getProfile()
-      if (response.success) {
-        setUserCredits(response.data.credits)
-      }
-    } catch (error) {
-      console.error('Error fetching user credits:', error)
-      setError('Failed to load user credits')
-    } finally {
-      setIsLoadingCredits(false)
-    }
-  }
 
   const handleAddTag = (tag: string) => {
     if (tag && !tags.includes(tag) && tags.length < 5) {
@@ -106,7 +84,7 @@ export default function CreatePostPage() {
       return
     }
 
-    if (userCredits !== null && userCredits < postCost) {
+    if (credits < postCost) {
       toast.error(`You need at least ${postCost} credits to create a post`)
       return
     }
@@ -130,8 +108,8 @@ export default function CreatePostPage() {
       
       if (response.success) {
         toast.success("Post created successfully!")
-        // Refresh user credits
-        await fetchUserCredits()
+        // Refresh credits and categories after post creation
+        await Promise.all([refreshCredits(), refreshCategories()])
         // Redirect to the new post
         router.push(`/posts/${response.data.id}`)
       } else {
@@ -148,7 +126,7 @@ export default function CreatePostPage() {
   }
 
   const canSubmit = title.trim() && content.trim() && category && 
-    (userCredits === null || userCredits >= postCost) && isSignedIn
+    credits >= postCost && isSignedIn
 
   // Show loading state while fetching credits
   if (isLoadingCredits) {
@@ -204,24 +182,24 @@ export default function CreatePostPage() {
       )}
 
       {/* Credit Warning */}
-      {userCredits !== null && userCredits < postCost ? (
+      {credits < postCost ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You need at least {postCost} credits to create a post. You currently have {userCredits} credits.{" "}
+            You need at least {postCost} credits to create a post. You currently have {credits} credits.{" "}
             <Link href="/credits" className="underline">
               Learn how to earn more credits
             </Link>
           </AlertDescription>
         </Alert>
-      ) : userCredits !== null ? (
+      ) : (
         <Alert>
           <Zap className="h-4 w-4" />
           <AlertDescription>
-            Creating a post costs {postCost} credits. You have {userCredits} credits available.
+            Creating a post costs {postCost} credits. You have {credits} credits available.
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
@@ -469,14 +447,14 @@ export default function CreatePostPage() {
               <div className="flex justify-between">
                 <span>Your balance:</span>
                 <span className="font-medium">
-                  {userCredits !== null ? `${userCredits} credits` : 'Loading...'}
+                  {isLoadingCredits ? 'Loading...' : `${credits} credits`}
                 </span>
               </div>
               <Separator />
               <div className="flex justify-between">
                 <span>After posting:</span>
                 <span className="font-medium">
-                  {userCredits !== null ? `${userCredits - postCost} credits` : '...'}
+                  {isLoadingCredits ? '...' : `${credits - postCost} credits`}
                 </span>
               </div>
               <div className="text-xs text-muted space-y-1">

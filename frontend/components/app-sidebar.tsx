@@ -31,21 +31,25 @@ import {
   Zap,
 } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
+import { useCredits } from "@/contexts/CreditsContext"
+import { useCategories } from "@/contexts/CategoriesContext"
 import Link from "next/link"
 
-const categories = [
-  { name: "Coding", icon: Code, count: "5.2k", href: "/feed?category=coding" },
-  { name: "Design", icon: Palette, count: "3.1k", href: "/feed?category=design" },
-  { name: "Business", icon: Briefcase, count: "2.8k", href: "/feed?category=business" },
-  { name: "Writing", icon: PenTool, count: "1.9k", href: "/feed?category=writing" },
-  { name: "Marketing", icon: TrendingUp, count: "1.5k", href: "/feed?category=marketing" },
-]
+// Category configuration with icons
+const categoryConfig = {
+  coding: { name: "Coding", icon: Code, href: "/feed?category=coding" },
+  design: { name: "Design", icon: Palette, href: "/feed?category=design" },
+  business: { name: "Business", icon: Briefcase, href: "/feed?category=business" },
+  writing: { name: "Writing", icon: PenTool, href: "/feed?category=writing" },
+  marketing: { name: "Marketing", icon: TrendingUp, href: "/feed?category=marketing" },
+}
 
 export function AppSidebar() {
   const { user, isSignedIn } = useUser()
+  const { credits, loading } = useCredits()
+  const { categories, loading: categoriesLoading } = useCategories()
 
-  // Mock data - in real app this would come from your database
-  const userCredits = 125
+  // Mock reputation data - in real app this would come from your database
   const userReputation = 1250
 
   return (
@@ -109,19 +113,24 @@ export function AppSidebar() {
           <SidebarGroupLabel>Popular Categories</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {categories.map((category) => (
-                <SidebarMenuItem key={category.name}>
-                  <SidebarMenuButton asChild>
-                    <Link href={category.href}>
-                      <category.icon className="w-4 h-4" />
-                      <span>{category.name}</span>
-                      <Badge variant="secondary" className="ml-auto text-xs">
-                        {category.count}
-                      </Badge>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {categories.map((category) => {
+                const config = categoryConfig[category.name as keyof typeof categoryConfig];
+                if (!config) return null;
+                
+                return (
+                  <SidebarMenuItem key={category.name}>
+                    <SidebarMenuButton asChild>
+                      <Link href={config.href}>
+                        <config.icon className="w-4 h-4" />
+                        <span>{config.name}</span>
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {categoriesLoading ? "..." : category.count}
+                        </Badge>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -178,7 +187,7 @@ export function AppSidebar() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">{user?.fullName || user?.firstName}</p>
               <div className="flex items-center space-x-2 text-xs text-muted">
-                <span>{userCredits} credits</span>
+                <span>{loading ? "..." : credits} credits</span>
                 <span>•</span>
                 <span>{userReputation} rep</span>
               </div>

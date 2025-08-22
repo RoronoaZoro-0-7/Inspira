@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,82 +20,19 @@ import {
   HelpCircle,
 } from "lucide-react"
 import Link from "next/link"
+import { useCredits } from "@/contexts/CreditsContext"
+import { userApi } from "@/lib/api"
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
 
-// Mock transaction data - in real app this would come from API
-const mockTransactions = [
-  {
-    id: 1,
-    type: "HELPFUL_REWARD",
-    amount: 10,
-    description: "Answer marked as helpful",
-    relatedPost: "How to implement authentication in Next.js 14?",
-    timestamp: "2024-01-15T10:30:00Z",
-    balance: 125,
-  },
-  {
-    id: 2,
-    type: "POST_COST",
-    amount: -5,
-    description: "Created new post",
-    relatedPost: "Best practices for React state management",
-    timestamp: "2024-01-15T09:15:00Z",
-    balance: 115,
-  },
-  {
-    id: 3,
-    type: "UPVOTE_REWARD",
-    amount: 1,
-    description: "Comment upvoted",
-    relatedPost: "How to optimize database queries?",
-    timestamp: "2024-01-15T08:45:00Z",
-    balance: 120,
-  },
-  {
-    id: 4,
-    type: "HELPFUL_REWARD",
-    amount: 10,
-    description: "Answer marked as helpful",
-    relatedPost: "CSS Grid vs Flexbox - when to use which?",
-    timestamp: "2024-01-14T16:20:00Z",
-    balance: 119,
-  },
-  {
-    id: 5,
-    type: "WELCOME_BONUS",
-    amount: 50,
-    description: "Welcome bonus for new users",
-    relatedPost: null,
-    timestamp: "2024-01-10T12:00:00Z",
-    balance: 109,
-  },
-  {
-    id: 6,
-    type: "POST_COST",
-    amount: -5,
-    description: "Created new post",
-    relatedPost: "How to handle errors in async JavaScript?",
-    timestamp: "2024-01-14T14:30:00Z",
-    balance: 59,
-  },
-  {
-    id: 7,
-    type: "UPVOTE_REWARD",
-    amount: 1,
-    description: "Post upvoted",
-    relatedPost: "Understanding TypeScript generics",
-    timestamp: "2024-01-14T11:15:00Z",
-    balance: 64,
-  },
-  {
-    id: 8,
-    type: "HELPFUL_REWARD",
-    amount: 10,
-    description: "Answer marked as helpful",
-    relatedPost: "Docker containerization best practices",
-    timestamp: "2024-01-13T15:45:00Z",
-    balance: 63,
-  },
-]
+// Interface for transaction data
+interface Transaction {
+  id: string;
+  amount: number;
+  type: 'earned' | 'spent';
+  description: string;
+  createdAt: string;
+}
 
 const transactionTypes = {
   HELPFUL_REWARD: {
@@ -122,11 +61,42 @@ const transactionTypes = {
   },
 }
 
-const currentBalance = 125
-const weeklyEarned = 25
-const weeklySpent = 15
-
 export default function CreditsPage() {
+  const { credits, loading } = useCredits()
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactionsLoading, setTransactionsLoading] = useState(true)
+  const [transactionsError, setTransactionsError] = useState<string | null>(null)
+  
+  const currentBalance = credits || 0
+  const weeklyEarned = 25 // This would be calculated from real data
+  const weeklySpent = 15 // This would be calculated from real data
+
+  // Fetch transactions
+  const fetchTransactions = async () => {
+    try {
+      setTransactionsLoading(true)
+      setTransactionsError(null)
+      const response = await userApi.getCredits()
+      if (response.success) {
+        setTransactions(response.data.transactions || [])
+      } else {
+        setTransactionsError("Failed to fetch transactions")
+        toast.error("Failed to load transaction history")
+      }
+    } catch (err) {
+      console.error("Error fetching transactions:", err)
+      setTransactionsError("Failed to fetch transactions")
+      toast.error("Failed to load transaction history")
+    } finally {
+      setTransactionsLoading(false)
+    }
+  }
+
+  // Fetch transactions on component mount
+  useEffect(() => {
+    fetchTransactions()
+  }, [])
+
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleDateString("en-US", {
       month: "short",
@@ -166,7 +136,9 @@ export default function CreditsPage() {
             <CardDescription>Your available credits for posting and interactions</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-serif font-bold text-primary mb-4">{currentBalance}</div>
+            <div className="text-4xl font-serif font-bold text-primary mb-4">
+              {loading ? "..." : currentBalance}
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full" />
@@ -278,49 +250,64 @@ export default function CreditsPage() {
               <CardDescription>Your complete credit transaction history</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockTransactions.map((transaction, index) => (
-                  <div key={transaction.id}>
-                    <div className="flex items-center justify-between py-3">
-                      <div className="flex items-center space-x-4">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            transactionTypes[transaction.type as keyof typeof transactionTypes].bgColor
-                          }`}
-                        >
-                          {getTransactionIcon(transaction.type as keyof typeof transactionTypes)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <p className="font-medium text-foreground">{transaction.description}</p>
-                            <Badge variant="outline" className="text-xs">
-                              {transactionTypes[transaction.type as keyof typeof transactionTypes].label}
-                            </Badge>
+              {transactionsLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted">Loading transactions...</p>
+                </div>
+              ) : transactionsError ? (
+                <div className="text-center py-8">
+                  <p className="text-muted mb-4">{transactionsError}</p>
+                  <Button onClick={fetchTransactions} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted">No transactions found.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {transactions.map((transaction, index) => (
+                    <div key={transaction.id}>
+                      <div className="flex items-center justify-between py-3">
+                        <div className="flex items-center space-x-4">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              transaction.type === 'earned' ? 'bg-green-100' : 'bg-red-100'
+                            }`}
+                          >
+                            {transaction.type === 'earned' ? (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <MessageSquare className="w-4 h-4 text-red-600" />
+                            )}
                           </div>
-                          {transaction.relatedPost && (
-                            <p className="text-sm text-muted mt-1">
-                              Related to: <span className="text-foreground">{transaction.relatedPost}</span>
-                            </p>
-                          )}
-                          <p className="text-xs text-muted mt-1">{formatDate(transaction.timestamp)}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <p className="font-medium text-foreground">{transaction.description}</p>
+                              <Badge variant="outline" className="text-xs">
+                                {transaction.type === 'earned' ? 'Earned' : 'Spent'}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted mt-1">{formatDate(transaction.createdAt)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div
+                            className={`text-lg font-medium ${
+                              transaction.amount > 0 ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {transaction.amount > 0 ? "+" : ""}
+                            {transaction.amount}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div
-                          className={`text-lg font-medium ${
-                            transaction.amount > 0 ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {transaction.amount > 0 ? "+" : ""}
-                          {transaction.amount}
-                        </div>
-                        <div className="text-xs text-muted">Balance: {transaction.balance}</div>
-                      </div>
+                      {index < transactions.length - 1 && <Separator />}
                     </div>
-                    {index < mockTransactions.length - 1 && <Separator />}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* Load More */}
               <div className="text-center pt-6">

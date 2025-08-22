@@ -4,6 +4,8 @@ import { Geist } from "next/font/google"
 import { Manrope } from "next/font/google"
 import { ClerkProvider } from "@clerk/nextjs"
 import { Toaster } from "sonner"
+import { CreditsProvider } from "@/contexts/CreditsContext"
+import { CategoriesProvider } from "@/contexts/CategoriesContext"
 import "./globals.css"
 
 const geist = Geist({
@@ -33,8 +35,12 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className={`${geist.variable} ${manrope.variable} antialiased`}>
         <body>
-          {children}
-          <Toaster position="top-right" />
+          <CreditsProvider>
+            <CategoriesProvider>
+              {children}
+              <Toaster position="top-right" />
+            </CategoriesProvider>
+          </CreditsProvider>
         </body>
       </html>
     </ClerkProvider>

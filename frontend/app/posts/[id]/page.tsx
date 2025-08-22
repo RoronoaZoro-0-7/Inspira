@@ -28,6 +28,7 @@ import { postApi, commentApi } from "@/lib/api"
 import { toast } from "sonner"
 import type { Post } from "@/lib/api"
 import { useUser } from "@clerk/nextjs"
+import { useCredits } from "@/contexts/CreditsContext"
 
 interface PageProps {
   params: {
@@ -66,6 +67,7 @@ interface Comment {
 
 export default function PostDetailPage({ params }: PageProps) {
   const { isSignedIn, user } = useUser()
+  const { refreshCredits } = useCredits()
   const [post, setPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +128,8 @@ export default function PostDetailPage({ params }: PageProps) {
       if (response.success) {
         // Update the post's upvote count
         setPost(prev => prev ? { ...prev, upvotes: response.data.upvotes } : null)
+        // Refresh credits after upvote
+        await refreshCredits()
         toast.success("Post upvoted!")
       }
     } catch (err) {
@@ -188,6 +192,8 @@ export default function PostDetailPage({ params }: PageProps) {
           }
           return comment
         }))
+        // Refresh credits after upvote
+        await refreshCredits()
         toast.success("Comment upvoted!")
       }
     } catch (err) {
