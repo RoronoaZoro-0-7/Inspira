@@ -15,7 +15,8 @@ import authMiddleware from '../middlewares/authMiddleware';
 const router = express.Router();
 
 // Public routes (no authentication required)
-router.get('/user/:userId', getUserById);
+router.get('/:userId', getUserById);
+
 
 // Protected routes (require authentication)
 router.use(requireAuth());

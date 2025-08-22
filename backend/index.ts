@@ -124,9 +124,9 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
 });
 
 // API Routes
-app.use('/api', authRoutes);
-app.use('/api', postRoutes);
-app.use('/api', commentRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/post', postRoutes);
+app.use('/api/comment', commentRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
