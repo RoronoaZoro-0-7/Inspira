@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/comments/:id', getComment);
 
 // Protected routes (require authentication)
-router.use(requireAuth());
+// router.use(requireAuth());
 router.use(authMiddleware);
 
 // Add comment to post

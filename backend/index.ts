@@ -47,7 +47,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Clerk middleware
-app.use(clerkMiddleware());
+// app.use(clerkMiddleware());
 
 // Webhook endpoint for Clerk user sync
 app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -95,7 +95,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
     }
 
     try {
-      await prisma.user.upsert({
+      const user = await prisma.user.upsert({
         where: { clerkId: id },
         update: {
           email: email,
@@ -104,15 +104,25 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
         create: {
           clerkId: id,
           email: email,
-          profile: {
-            create: {
-              name: attributes.first_name && attributes.last_name 
-                ? `${attributes.first_name} ${attributes.last_name}` 
-                : attributes.first_name || attributes.last_name || null,
-              imageUrl: attributes.image_url || null,
-            }
-          }
         },
+      });
+
+      // Create or update profile separately
+      await prisma.profile.upsert({
+        where: { userId: user.id },
+        update: {
+          name: attributes.first_name && attributes.last_name 
+            ? `${attributes.first_name} ${attributes.last_name}` 
+            : attributes.first_name || attributes.last_name || null,
+          imageUrl: attributes.image_url || null,
+        },
+        create: {
+          userId: user.id,
+          name: attributes.first_name && attributes.last_name 
+            ? `${attributes.first_name} ${attributes.last_name}` 
+            : attributes.first_name || attributes.last_name || null,
+          imageUrl: attributes.image_url || null,
+        }
       });
     } catch (error) {
       console.error('Error syncing user:', error);
