@@ -1,0 +1,107 @@
+---
+1. User
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| clerkId    | TEXT      | UNIQUE                                      |
+| email      | TEXT      | UNIQUE                                      |
+| role       | TEXT      | DEFAULT 'USER' (enum: USER, MODERATOR, ADMIN)|
+| profileId  | TEXT      | UNIQUE, FOREIGN KEY (Profile.id), NULLABLE  |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+| updatedAt  | TIMESTAMP | DEFAULT now(), updated on update            |
+
+---
+2. Profile
+| Column         | Type      | Constraints                                 |
+|----------------|-----------|---------------------------------------------|
+| id             | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| userId         | TEXT      | UNIQUE, FOREIGN KEY (User.id), ON DELETE CASCADE |
+| name           | TEXT      | NULLABLE                                    |
+| imageUrl       | TEXT      | NULLABLE                                    |
+| bio            | TEXT      | NULLABLE                                    |
+| credits        | INTEGER   | DEFAULT 0                                   |
+| expertiseTags  | TEXT[]    | DEFAULT []                                  |
+| interestTags   | TEXT[]    | DEFAULT []                                  |
+| createdAt      | TIMESTAMP | DEFAULT now()                               |
+| updatedAt      | TIMESTAMP | DEFAULT now(), updated on update            |
+
+---
+3. Category
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| slug       | TEXT      | UNIQUE                                      |
+| name       | TEXT      | NOT NULL                                    |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+| updatedAt  | TIMESTAMP | DEFAULT now(), updated on update            |
+
+---
+4. Post
+| Column             | Type      | Constraints                                 |
+|--------------------|-----------|---------------------------------------------|
+| id                 | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| authorId           | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| categoryIds        | TEXT[]    |                                             |
+| title              | TEXT      | NOT NULL                                    |
+| content            | TEXT      | NULLABLE                                    |
+| imageUrls          | TEXT[]    | DEFAULT []                                  |
+| videoUrls          | TEXT[]    | DEFAULT []                                  |
+| helpfulCommentIds  | TEXT[]    | NULLABLE                                    |
+| createdAt          | TIMESTAMP | DEFAULT now()                               |
+| updatedAt          | TIMESTAMP | DEFAULT now(), updated on update            |
+
+---
+5. Comment
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| postId     | TEXT      | FOREIGN KEY (Post.id), ON DELETE CASCADE    |
+| authorId   | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| content    | TEXT      | NOT NULL                                    |
+| parentId   | TEXT      | NULLABLE, FOREIGN KEY (Comment.id), ON DELETE CASCADE |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+| updatedAt  | TIMESTAMP | DEFAULT now(), updated on update            |
+
+---
+6. PostUpvote
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| postId     | TEXT      | FOREIGN KEY (Post.id), ON DELETE CASCADE    |
+| userId     | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+| UNIQUE     | (postId, userId) | Prevents duplicate upvotes           |
+
+---
+7. CommentUpvote
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| commentId  | TEXT      | FOREIGN KEY (Comment.id), ON DELETE CASCADE |
+| userId     | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+| UNIQUE     | (commentId, userId) | Prevents duplicate upvotes         |
+
+---
+8. HelpfulMark
+| Column     | Type      | Constraints                                 |
+|------------|-----------|---------------------------------------------|
+| id         | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| postId     | TEXT      | UNIQUE, FOREIGN KEY (Post.id), ON DELETE CASCADE |
+| commentId  | TEXT      | UNIQUE, FOREIGN KEY (Comment.id), ON DELETE CASCADE |
+| markedById | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| createdAt  | TIMESTAMP | DEFAULT now()                               |
+
+---
+9. CreditTransaction
+| Column      | Type      | Constraints                                 |
+|-------------|-----------|---------------------------------------------|
+| id          | TEXT      | PRIMARY KEY, DEFAULT cuid()                 |
+| userId      | TEXT      | FOREIGN KEY (Profile.id), ON DELETE CASCADE |
+| type        | TEXT      | ENUM (CreditTxType)                         |
+| delta       | INTEGER   | NOT NULL                                    |
+| balanceAfter| INTEGER   | NULLABLE                                    |
+| postId      | TEXT      | NULLABLE, FOREIGN KEY (Post.id), ON DELETE SET NULL |
+| commentId   | TEXT      | NULLABLE, FOREIGN KEY (Comment.id), ON DELETE SET NULL |
+| notes       | TEXT      | NULLABLE                                    |
+| createdAt   | TIMESTAMP | DEFAULT now()                               |
