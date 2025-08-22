@@ -19,11 +19,6 @@ enum Role {
   ADMIN
 }
 
-enum PostStatus {
-  OPEN
-  RESOLVED
-  CLOSED
-}
 
 enum CreditTxType {
   STARTER_GRANT // initial credits on signup
@@ -38,34 +33,42 @@ enum CreditTxType {
 //
 
 model User {
-  id       String  @id @default(cuid())
-  email    String  @unique
-  name     String?
-  imageUrl String?
-  bio      String?
+  id      String @id @default(cuid())
+  clerkId String @unique
+  email   String @unique
+  role    Role   @default(USER)
 
-  // Universal currency (do NOT trust this alone; enforce with CreditTransaction + transactions)
-  credits Int @default(0)
-
-  // Optional: simple tagging of expertise/interests for better feed/matching
-  expertiseTags String[] @default([]) // e.g., ["java", "oop", "photoshop"]
-  interestTags  String[] @default([])
-
-  role Role @default(USER)
-
-  posts          Post[]
-  comments       Comment[]
-  postUpvotes    PostUpvote[]
-  commentUpvotes CommentUpvote[]
-  helpfulMarks   HelpfulMark[]   @relation("MarkedBy") // marks performed by this user (as OP)
-
-  creditTxs CreditTransaction[]
-
+  profile Profile?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([role])
   @@index([createdAt])
+}
+
+model Profile {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name     String?
+  imageUrl String?
+  bio      String?
+  credits  Int     @default(0)
+  expertiseTags String[] @default([])
+  interestTags  String[] @default([])
+
+  // Direct relations to Profile (author/user fields)
+  authoredPosts    Post[]           @relation("PostAuthor")
+  authoredComments Comment[]        @relation("CommentAuthor")
+  postUpvotes      PostUpvote[]     @relation("UserPostUpvotes")
+  commentUpvotes   CommentUpvote[]  @relation("UserCommentUpvotes")
+  markedHelpful    HelpfulMark[]    @relation("MarkedBy")
+  creditTxs        CreditTransaction[] @relation("UserCreditTxs")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
@@ -82,21 +85,18 @@ model Category {
 model Post {
   id       String @id @default(cuid())
   authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author   Profile   @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryIds String[]
+  categories Category[]
 
-  title   String
-  content String // Markdown/serialized content
-  status  PostStatus @default(OPEN)
-
-  // Economy knobs (set once on creation)
-  postCost      Int @default(2) // credits charged to create post
-  helpfulReward Int @default(5) // credits transferred when marked helpful
+  title      String
+  content    String? // plain text content
+  imageUrls  String[] @default([]) // multiple image URLs
+  videoUrls  String[] @default([]) // multiple video URLs
 
   // Optional denormalized pointer for quick reads
-  helpfulCommentId String? @unique // set once when resolved; ensures one helpful per post
+  helpfulCommentIds String[] // can store multiple helpful comment IDs
 
   comments    Comment[]
   upvotes     PostUpvote[]
@@ -107,8 +107,7 @@ model Post {
   CreditTransaction CreditTransaction[]
 
   @@index([authorId, createdAt])
-  @@index([status, createdAt])
-  @@index([categoryId, createdAt])
+  @@index([categoryIds, createdAt])
 }
 
 model Comment {
@@ -118,7 +117,7 @@ model Comment {
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author   Profile   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   content String
 
@@ -148,11 +147,11 @@ model PostUpvote {
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   Profile   @relation("UserPostUpvotes", fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
-  @@unique([postId, userId]) // prevents duplicate upvotes
+@@unique([postId, userId]) // prevents duplicate upvotes
   @@index([userId, createdAt])
 }
 
@@ -165,7 +164,7 @@ model CommentUpvote {
   comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   Profile   @relation("UserCommentUpvotes", fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -190,7 +189,7 @@ model HelpfulMark {
   comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   markedById String // should equal post.authorId (enforce in app logic/SQL trigger if you want)
-  markedBy   User   @relation("MarkedBy", fields: [markedById], references: [id], onDelete: Cascade)
+  markedBy   Profile   @relation("MarkedBy", fields: [markedById], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -208,7 +207,7 @@ model CreditTransaction {
   id String @id @default(cuid())
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   Profile   @relation("UserCreditTxs", fields: [userId], references: [id], onDelete: Cascade)
 
   type         CreditTxType
   delta        Int // + adds credits; - spends credits
@@ -230,7 +229,3 @@ model CreditTransaction {
   @@index([postId])
   @@index([commentId])
 }
-
-
-
-
