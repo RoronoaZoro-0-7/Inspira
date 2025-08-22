@@ -27,7 +27,6 @@ const authMiddleware = async function(req: Request, res: Response, next: NextFun
       clerkId:clerkId
     }
   });
-  console.log(user);
   
   if (!user) {
     return res.status(401).json({ message: "Unauthorized" });

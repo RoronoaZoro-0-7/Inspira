@@ -37,9 +37,21 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     const { name, bio, expertiseTags, interestTags } = req.body;
 
+    // Check if profile exists
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.user.clerkId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Not found",
+        message: "Profile not found"
+      });
+    }
+
     const updatedProfile = await prisma.profile.update({
       where: {
-        userId: req.user.id
+        userId: req.user.clerkId
       },
       data: {
         name: name || undefined,
