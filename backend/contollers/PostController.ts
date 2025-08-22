@@ -156,13 +156,13 @@ export const createPost = async (req: Request, res: Response) => {
     }
 
     const POST_COST = 5; // Credits required to create a post
-
+    
     // Check if user has enough credits
     const userProfile = await prisma.profile.findUnique({
-      where: { userId: req.user.id },
+      where: { userId: req.user.clerkId },
       select: { credits: true }
     });
-
+    console.log(userProfile?.credits)
     if (!userProfile || userProfile.credits < POST_COST) {
       return res.status(400).json({
         error: "Insufficient credits",
@@ -180,7 +180,7 @@ export const createPost = async (req: Request, res: Response) => {
           categoryIds: categoryIds || [],
           imageUrls: uploadedImageUrls,
           videoUrls: uploadedVideoUrls,
-          authorId: req.user.profile!.id
+          authorId: req.user.profile!.clerkId
         },
         include: {
           author: {
@@ -195,14 +195,14 @@ export const createPost = async (req: Request, res: Response) => {
 
       // Deduct credits
       await tx.profile.update({
-        where: { userId: req.user.id },
+        where: { userId: req.user.clerkId },
         data: { credits: { decrement: POST_COST } }
       });
 
       // Record credit transaction
       await tx.creditTransaction.create({
         data: {
-          userId: req.user.profile!.id,
+          userId: req.user.profile!.clerkId,
           type: 'POST_COST',
           delta: -POST_COST,
           postId: post.id,

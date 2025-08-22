@@ -15,14 +15,15 @@ import authMiddleware from '../middlewares/authMiddleware';
 const router = express.Router();
 
 // Public routes (no authentication required)
-router.get('/:userId', getUserById);
+router.get('/user/:userId', getUserById);
 
 
 // Protected routes (require authentication)
 // router.use(requireAuth());
-router.use(authMiddleware);
+// router.use();
 
 // User profile
+router.use(authMiddleware);
 router.get('/me', getCurrentUser);
 router.put('/profile', updateProfile);
 
