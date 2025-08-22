@@ -11,28 +11,28 @@ declare global {
   }
 }
 
-const authMiddleware = async function(req: Request, res: Response, next: NextFunction) {
+const authMiddleware = async function (req: Request, res: Response, next: NextFunction) {
   try {
     // const { userId } = getAuth(req);
-    
+
     // if (!userId) {
     //   return res.status(401).json({ 
     //     error: "Unauthorized", 
     //     message: "No user ID found in request" 
     //   });
     // }
-     const clerkId = "user_31eMxGjCvxqUIb4vg87bzqhN6j1";
-  const user = await prisma.user.findUnique({
-    where: {
-      clerkId:clerkId
+    const clerkId = "user_31eMxGjCvxqUIb4vg87bzqhN6j1";
+    const user = await prisma.user.findUnique({
+      where: {
+        clerkId: clerkId
+      }
+    });
+    console.log(user);
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
-  });
-  console.log(user);
-  
-  if (!user) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-  req.user = user;
+    req.user = user;
 
     // const user = await prisma.user.findUnique({
     //   where: {
@@ -55,9 +55,9 @@ const authMiddleware = async function(req: Request, res: Response, next: NextFun
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    return res.status(500).json({ 
-      error: "Internal server error", 
-      message: "Authentication failed" 
+    return res.status(500).json({
+      error: "Internal server error",
+      message: "Authentication failed"
     });
   }
 };

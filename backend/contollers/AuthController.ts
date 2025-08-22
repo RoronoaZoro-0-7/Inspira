@@ -37,6 +37,18 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     const { name, bio, expertiseTags, interestTags } = req.body;
 
+    // Check if profile exists
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.user.clerkId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Not found",
+        message: "Profile not found"
+      });
+    }
+
     const updatedProfile = await prisma.profile.update({
       where: {
         userId: req.user.clerkId
@@ -153,7 +165,7 @@ export const getUserCredits = async (req: Request, res: Response) => {
 
     const profile = await prisma.profile.findUnique({
       where: {
-        userId: req.user.id
+        userId: req.user.clerkId
       },
       select: {
         credits: true
@@ -190,61 +202,53 @@ export const getUserPosts = async (req: Request, res: Response) => {
       });
     }
 
-    const { page = '1', limit = '10' } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const skip = (pageNum - 1) * limitNum;
-
-    const [posts, total] = await prisma.$transaction([
-      prisma.post.findMany({
-        where: {
-          authorId: req.user.profile!.id
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
+    console.log(profile);
+    
+    if (!profile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
+      });
+    }
+    
+    const posts = await prisma.post.findMany({
+      where: {
+        authorId: profile.id
+      },
+      include: {
+        categories: true,
+        _count: {
+          select: {
+            comments: true,
+            upvotes: true
+          }
         },
-        include: {
-          categories: true,
-          _count: {
-            select: {
-              comments: true,
-              upvotes: true
-            }
-          },
-          helpfulMark: {
-            include: {
-              comment: {
-                select: {
-                  content: true,
-                  author: {
-                    select: {
-                      name: true
-                    }
+        helpfulMark: {
+          include: {
+            comment: {
+              select: {
+                content: true,
+                author: {
+                  select: {
+                    name: true
                   }
                 }
               }
             }
           }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum
-      }),
-      prisma.post.count({
-        where: {
-          authorId: req.user.profile!.id
         }
-      })
-    ]);
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
     res.json({
       success: true,
-      data: {
-        posts,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum)
-        }
-      }
+      data: posts
     });
   } catch (error) {
     console.error('Get user posts error:', error);
@@ -265,66 +269,56 @@ export const getUserComments = async (req: Request, res: Response) => {
       });
     }
 
-    const { page = '1', limit = '10' } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const skip = (pageNum - 1) * limitNum;
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
+    if (!profile) {
+      return res.status(404).json({
+        error: "Not found",
+        message: "Profile not found"
+      });
+    }
 
-    const [comments, total] = await prisma.$transaction([
-      prisma.comment.findMany({
-        where: {
-          authorId: req.user.profile!.id
+    const comments = await prisma.comment.findMany({
+      where: {
+        authorId: profile.id
+      },
+      include: {
+        post: {
+          select: {
+            id: true,
+            title: true
+          }
         },
-        include: {
-          post: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          parent: {
-            select: {
-              content: true
-            }
-          },
-          _count: {
-            select: {
-              upvotes: true,
-              replies: true
-            }
-          },
-          helpfulFor: {
-            select: {
-              post: {
-                select: {
-                  title: true
-                }
+        parent: {
+          select: {
+            content: true
+          }
+        },
+        _count: {
+          select: {
+            upvotes: true,
+            replies: true
+          }
+        },
+        helpfulFor: {
+          select: {
+            post: {
+              select: {
+                title: true
               }
             }
           }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum
-      }),
-      prisma.comment.count({
-        where: {
-          authorId: req.user.profile!.id
         }
-      })
-    ]);
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
     res.json({
       success: true,
-      data: {
-        comments,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum)
-        }
-      }
+      data: comments
     });
   } catch (error) {
     console.error('Get user comments error:', error);
@@ -345,64 +339,50 @@ export const getCreditHistory = async (req: Request, res: Response) => {
       });
     }
 
-    const { page = '1', limit = '20', type } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const skip = (pageNum - 1) * limitNum;
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
+    if (!profile) {
+      return res.status(404).json({
+        error: "Not found",
+        message: "Profile not found"
+      });
+    }
 
     // Build where clause
     const where: any = {
-      userId: req.user.profile!.id
+      userId: profile.id
     };
 
-    if (type) {
-      where.type = type;
-    }
-
-    const [transactions, total] = await prisma.$transaction([
-      prisma.creditTransaction.findMany({
-        where,
-        include: {
-          post: {
-            select: {
-              title: true
-            }
-          },
-          comment: {
-            select: {
-              content: true,
-              post: {
-                select: {
-                  title: true
-                }
+    const transactions = await prisma.creditTransaction.findMany({
+      where,
+      include: {
+        post: {
+          select: {
+            title: true
+          }
+        },
+        comment: {
+          select: {
+            content: true,
+            post: {
+              select: {
+                title: true
               }
             }
           }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limitNum
-      }),
-      prisma.creditTransaction.count({ where })
-    ]);
-
-    // Get current balance
-    const profile = await prisma.profile.findUnique({
-      where: { userId: req.user.id },
-      select: { credits: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     res.json({
       success: true,
       data: {
         transactions,
-        currentBalance: profile?.credits || 0,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum)
-        }
+        currentBalance: profile.credits || 0
       }
     });
   } catch (error) {

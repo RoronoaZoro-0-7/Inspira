@@ -23,8 +23,7 @@ router.get('/user/:userId', getUserById);
 // router.use();
 
 // User profile
-router.use(authMiddleware);
-router.get('/me', getCurrentUser);
+router.get('/me',getCurrentUser);
 router.put('/profile', updateProfile);
 
 // User content

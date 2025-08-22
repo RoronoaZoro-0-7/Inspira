@@ -5,11 +5,17 @@ import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { Webhook } from 'svix';
 import authMiddleware from "./middlewares/authMiddleware";
 import { PrismaClient } from "@prisma/client";
+import { createServer } from 'http';
 
 // Import routes
 import authRoutes from "./routes/auth";
 import postRoutes from "./routes/posts";
 import commentRoutes from "./routes/comments";
+import chatRoutes from "./routes/chat";
+import { deleteAccount } from "./contollers/AuthController";
+
+// Import WebSocket server
+import ChatWebSocketServer from "./utils/websocket";
 
 dotenv.config();
 
@@ -46,8 +52,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Clerk middleware
-// app.use(clerkMiddleware());
+// Clerk middleware with error handling
+// try {
+//   app.use(clerkMiddleware());
+//   console.log('✅ Clerk middleware initialized successfully');
+// } catch (error) {
+//   console.error('❌ Failed to initialize Clerk middleware:', error);
+//   console.error('📝 Please check your CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY');
+//   process.exit(1);
+// }
 
 // Webhook endpoint for Clerk user sync
 app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -95,7 +108,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
     }
 
     try {
-      const user = await prisma.user.upsert({
+      await prisma.user.upsert({
         where: { clerkId: id },
         update: {
           email: email,
@@ -104,30 +117,23 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
         create: {
           clerkId: id,
           email: email,
+          profile: {
+            create: {
+              userId: id,
+              name: attributes.first_name && attributes.last_name 
+                ? `${attributes.first_name} ${attributes.last_name}` 
+                : attributes.first_name || attributes.last_name || null,
+              imageUrl: attributes.image_url || null,
+            }
+          }
         },
-      });
-
-      // Create or update profile separately
-      await prisma.profile.upsert({
-        where: { userId: user.id },
-        update: {
-          name: attributes.first_name && attributes.last_name 
-            ? `${attributes.first_name} ${attributes.last_name}` 
-            : attributes.first_name || attributes.last_name || null,
-          imageUrl: attributes.image_url || null,
-        },
-        create: {
-          userId: user.id,
-          name: attributes.first_name && attributes.last_name 
-            ? `${attributes.first_name} ${attributes.last_name}` 
-            : attributes.first_name || attributes.last_name || null,
-          imageUrl: attributes.image_url || null,
-        }
       });
     } catch (error) {
       console.error('Error syncing user:', error);
       return res.status(500).json({ error: 'Error syncing user' });
     }
+  } else if (eventType === 'user.deleted') {
+    await deleteAccount(req as any, res as any);
   }
 
   res.status(200).json({ success: true });
@@ -137,6 +143,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
 app.use('/api/auth', authRoutes);
 app.use('/api/post', postRoutes);
 app.use('/api/comment', commentRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -151,8 +158,20 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+// Create HTTP server
+const server = createServer(app);
+
+// Initialize WebSocket server
+const chatWebSocket = new ChatWebSocketServer(server);
+
+// Make WebSocket server available globally
+(global as any).chatWebSocket = chatWebSocket;
+
+server.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`🔌 WebSocket URL: ws://localhost:${PORT}`);
 });
 
 export default prisma;

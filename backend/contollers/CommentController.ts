@@ -33,25 +33,18 @@ export const addComment = async (req: Request, res: Response) => {
       });
     }
 
+    const profile = await prisma.profile.findUnique({
+      where:{
+        userId: req.user.clerkId
+      }
+    })
+
     // Create comment
     const comment = await prisma.comment.create({
       data: {
         content,
         postId,
-        authorId: req.user.profile!.id
-      },
-      include: {
-        author: {
-          select: {
-            name: true,
-            imageUrl: true
-          }
-        },
-        post: {
-          select: {
-            title: true
-          }
-        }
+        authorId: profile.id
       }
     });
 
@@ -88,6 +81,12 @@ export const addReply = async (req: Request, res: Response) => {
       });
     }
 
+    const profile = await prisma.profile.findUnique({
+      where:{
+        userId: req.user.clerkId
+      }
+    });
+  
     // Check if parent comment exists
     const parentComment = await prisma.comment.findUnique({
       where: { id: commentId },
@@ -113,16 +112,10 @@ export const addReply = async (req: Request, res: Response) => {
       data: {
         content,
         postId: parentComment.postId,
-        authorId: req.user.profile!.id,
+        authorId: profile.id,
         parentId: commentId
       },
       include: {
-        author: {
-          select: {
-            name: true,
-            imageUrl: true
-          }
-        },
         parent: {
           select: {
             content: true
@@ -172,15 +165,31 @@ export const upvoteComment = async (req: Request, res: Response) => {
         message: "Comment not found" 
       });
     }
-
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
     // Try to create upvote (will fail if already exists due to unique constraint)
     try {
       const upvote = await prisma.commentUpvote.create({
         data: {
           commentId,
-          userId: req.user.profile!.id
+          userId: profile.id
         }
       });
+
+      // Increment the comment author's credits by 5
+      const commentAuthor = await prisma.comment.findUnique({
+        where: { id: commentId },
+        select: { authorId: true }
+      });
+      if (commentAuthor && commentAuthor.authorId) {
+        await prisma.profile.update({
+          where: { id: commentAuthor.authorId },
+          data: { credits: { increment: 5 } }
+        });
+      }
 
       res.json({
         success: true,
