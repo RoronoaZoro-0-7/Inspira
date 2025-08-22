@@ -209,6 +209,13 @@ export const getUserPosts = async (req: Request, res: Response) => {
     });
     console.log(profile);
     
+    if (!profile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
+      });
+    }
+    
     const posts = await prisma.post.findMany({
       where: {
         authorId: profile.id

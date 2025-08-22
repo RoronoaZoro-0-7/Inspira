@@ -20,7 +20,7 @@ router.get('/user/:userId', getUserById);
 
 // Protected routes (require authentication)
 // router.use(requireAuth());
-router.use(authMiddleware);
+// router.use();
 
 // User profile
 router.get('/me',getCurrentUser);

@@ -266,6 +266,14 @@ export const resolvePost = async (req: Request, res: Response) => {
         userId: req.user.clerkId
       }
     });
+    
+    if (!profile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
+      });
+    }
+    
     if (post.authorId !== profile.id) {
       return res.status(403).json({
         error: "Forbidden",
@@ -392,6 +400,14 @@ export const upvotePost = async (req: Request, res: Response) => {
         userId: req.user.clerkId
       }
     });
+    
+    if (!profile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
+      });
+    }
+    
     // Try to create upvote (will fail if already exists due to unique constraint)
     try {
       const upvote = await prisma.postUpvote.create({
@@ -456,8 +472,22 @@ export const deletePost = async (req: Request, res: Response) => {
       });
     }
 
+    // Get user profile to check ownership
+    const profile = await prisma.profile.findUnique({
+      where: {
+        userId: req.user.clerkId
+      }
+    });
+
+    if (!profile) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "User profile not found"
+      });
+    }
+
     // Check if user is the author
-    if (post.authorId !== req.user.profile!.id) {
+    if (post.authorId !== profile.id) {
       return res.status(403).json({
         error: "Forbidden",
         message: "You are not authorized to delete this post"
