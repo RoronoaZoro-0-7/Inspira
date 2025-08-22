@@ -10,7 +10,7 @@ router.get('/', getHome);
 router.get('/posts', getPosts);
 
 // Protected routes (require authentication)
-router.use(requireAuth());
+// router.use(requireAuth());
 router.use(authMiddleware);
 
 // Create post

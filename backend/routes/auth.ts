@@ -19,7 +19,7 @@ router.get('/:userId', getUserById);
 
 
 // Protected routes (require authentication)
-router.use(requireAuth());
+// router.use(requireAuth());
 router.use(authMiddleware);
 
 // User profile
