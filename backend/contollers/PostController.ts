@@ -148,7 +148,7 @@ export const createPost = async (req: Request, res: Response) => {
     }
 
     // Create post and deduct credits in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx:any) => {
       // Create the post
       const post = await tx.post.create({
         data: {
@@ -274,7 +274,7 @@ export const resolvePost = async (req: Request, res: Response) => {
     const HELPFUL_REWARD = 10; // Credits given to helpful comment author
 
     // Mark as helpful and transfer credits in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx:any) => {
       // Create helpful mark
       const helpfulMark = await tx.helpfulMark.create({
         data: {
