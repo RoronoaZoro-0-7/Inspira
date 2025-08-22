@@ -1,68 +1,140 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MessageSquare, ArrowUp, Clock, CheckCircle, Filter, Plus } from "lucide-react"
+import { MessageSquare, ArrowUp, Clock, CheckCircle, Filter, Plus, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { postApi } from "@/lib/api"
+import { toast } from "sonner"
 
-// Mock data - in real app this would come from API
-const mockPosts = [
-  {
-    id: 1,
-    title: "How to implement authentication in Next.js 14 with App Router?",
-    excerpt:
-      "I'm struggling with setting up authentication in my Next.js 14 project using the new App Router. What's the best approach for handling user sessions?",
-    author: {
-      name: "Sarah Chen",
-      avatar: "/sarah-avatar.png",
-      reputation: 2450,
-    },
-    category: "Coding",
-    upvotes: 24,
-    comments: 8,
-    timeAgo: "2 hours ago",
-    isHelpful: false,
-    credits: 5,
-  },
-  {
-    id: 2,
-    title: "Best practices for designing mobile-first responsive layouts",
-    excerpt:
-      "Looking for advice on creating responsive designs that work well across all devices. What are the key principles I should follow?",
-    author: {
-      name: "Marcus Rodriguez",
-      avatar: "/marcus-avatar.png",
-      reputation: 1890,
-    },
-    category: "Design",
-    upvotes: 18,
-    comments: 12,
-    timeAgo: "4 hours ago",
-    isHelpful: true,
-    credits: 5,
-  },
-  {
-    id: 3,
-    title: "How to validate startup ideas before building an MVP?",
-    excerpt:
-      "I have several startup ideas but want to validate them properly before investing time and money. What's the most effective validation process?",
-    author: {
-      name: "Emily Watson",
-      avatar: "/emily-avatar.png",
-      reputation: 3200,
-    },
-    category: "Business",
-    upvotes: 31,
-    comments: 15,
-    timeAgo: "6 hours ago",
-    isHelpful: false,
-    credits: 5,
-  },
-]
+// Use the Post interface from the API
+import type { Post } from "@/lib/api"
 
 export default function FeedPage() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState("newest")
+  const [category, setCategory] = useState("all")
+
+  // Fetch posts from API
+  const fetchPosts = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await postApi.getAll()
+      if (response.success) {
+        setPosts(response.data.posts || [])
+      } else {
+        setError("Failed to fetch posts")
+        toast.error("Failed to load posts")
+      }
+    } catch (err) {
+      console.error("Error fetching posts:", err)
+      setError("Failed to fetch posts")
+      toast.error("Failed to load posts")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch posts on component mount
+  useEffect(() => {
+    fetchPosts()
+  }, [])
+
+  // Format date to relative time
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+    if (diffInSeconds < 60) return "just now"
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`
+    return date.toLocaleDateString()
+  }
+
+  // Filter and sort posts
+  const filteredAndSortedPosts = posts
+    .filter(post => {
+      if (category === "all") return true
+      // You can implement category filtering here when categories are available
+      return true
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "newest":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        case "trending":
+          return b.upvotes - a.upvotes
+        case "most-upvotes":
+          return b.upvotes - a.upvotes
+        default:
+          return 0
+      }
+    })
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-foreground">Knowledge Feed</h1>
+            <p className="text-muted mt-1">Discover questions, share insights, and build your reputation</p>
+          </div>
+          <Button asChild>
+            <Link href="/create">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Post
+            </Link>
+          </Button>
+        </div>
+        
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted">Loading posts...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-foreground">Knowledge Feed</h1>
+            <p className="text-muted mt-1">Discover questions, share insights, and build your reputation</p>
+          </div>
+          <Button asChild>
+            <Link href="/create">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Post
+            </Link>
+          </Button>
+        </div>
+        
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <p className="text-muted mb-4">{error}</p>
+            <Button onClick={fetchPosts} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Page Header */}
@@ -93,7 +165,7 @@ export default function FeedPage() {
           </SelectContent>
         </Select>
 
-        <Select defaultValue="all">
+        <Select value={category} onValueChange={setCategory}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -115,70 +187,86 @@ export default function FeedPage() {
 
       {/* Posts Feed */}
       <div className="space-y-4">
-        {mockPosts.map((post) => (
-          <Card key={post.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Badge variant="secondary">{post.category}</Badge>
-                    {post.isHelpful && (
-                      <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Helpful
+        {filteredAndSortedPosts.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-muted mb-4">No posts found</p>
+            <Button asChild>
+              <Link href="/create">
+                <Plus className="w-4 h-4 mr-2" />
+                Create the first post
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          filteredAndSortedPosts.map((post) => (
+            <Card key={post.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Badge variant="secondary">
+                        {post.categoryIds.length > 0 ? post.categoryIds[0] : "General"}
                       </Badge>
-                    )}
+                      {post.isResolved && (
+                        <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Resolved
+                        </Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-xl leading-tight hover:text-primary transition-colors">
+                      <Link href={`/posts/${post.id}`}>{post.title}</Link>
+                    </CardTitle>
+                    <CardDescription className="mt-2 text-base leading-relaxed text-foreground">
+                      {post.content.length > 200 ? `${post.content.substring(0, 200)}...` : post.content}
+                    </CardDescription>
                   </div>
-                  <CardTitle className="text-xl leading-tight hover:text-primary transition-colors">
-                    <Link href={`/posts/${post.id}`}>{post.title}</Link>
-                  </CardTitle>
-                  <CardDescription className="mt-2 text-base leading-relaxed">{post.excerpt}</CardDescription>
-                </div>
-                <div className="text-right text-sm text-muted">
-                  <div className="flex items-center space-x-1">
-                    <Badge variant="outline" className="text-xs">
-                      {post.credits} credits
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={post.author.avatar || "/placeholder.svg"} alt={post.author.name} />
-                      <AvatarFallback>{post.author.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{post.author.name}</p>
-                      <p className="text-xs text-muted">{post.author.reputation} reputation</p>
+                  <div className="text-right text-sm text-muted">
+                    <div className="flex items-center space-x-1">
+                      <Badge variant="outline" className="text-xs">
+                        5 credits
+                      </Badge>
                     </div>
                   </div>
-                  <Separator orientation="vertical" className="h-8" />
-                  <div className="flex items-center space-x-1 text-muted text-sm">
-                    <Clock className="w-4 h-4" />
-                    <span>{post.timeAgo}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={post.author.imageUrl || "/placeholder.svg"} alt={post.author.name} />
+                        <AvatarFallback>{post.author.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{post.author.name}</p>
+                        <p className="text-xs text-muted">Member</p>
+                      </div>
+                    </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="flex items-center space-x-1 text-muted text-sm">
+                      <Clock className="w-4 h-4" />
+                      <span>{formatTimeAgo(post.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-4">
+                    <Button variant="ghost" size="sm" className="text-muted hover:text-foreground">
+                      <ArrowUp className="w-4 h-4 mr-1" />
+                      {post.upvotes}
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-muted hover:text-foreground" asChild>
+                      <Link href={`/posts/${post.id}`}>
+                        <MessageSquare className="w-4 h-4 mr-1" />
+                        0
+                      </Link>
+                    </Button>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-4">
-                  <Button variant="ghost" size="sm" className="text-muted hover:text-foreground">
-                    <ArrowUp className="w-4 h-4 mr-1" />
-                    {post.upvotes}
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-muted hover:text-foreground" asChild>
-                    <Link href={`/posts/${post.id}`}>
-                      <MessageSquare className="w-4 h-4 mr-1" />
-                      {post.comments}
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Load More */}

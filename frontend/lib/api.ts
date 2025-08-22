@@ -180,9 +180,96 @@ export const commentApi = {
     });
   },
 
+  async getByPostId(postId: string): Promise<ApiResponse<Array<{
+    id: string;
+    content: string;
+    authorId: string;
+    postId: string;
+    upvotes: number;
+    createdAt: string;
+    author: {
+      name: string;
+      imageUrl?: string;
+    };
+    replies: Array<{
+      id: string;
+      content: string;
+      authorId: string;
+      createdAt: string;
+      author: {
+        name: string;
+        imageUrl?: string;
+      };
+      _count: {
+        upvotes: number;
+      };
+    }>;
+    _count: {
+      upvotes: number;
+      replies: number;
+    };
+  }>>> {
+    return makeApiRequest<ApiResponse<Array<{
+      id: string;
+      content: string;
+      authorId: string;
+      postId: string;
+      upvotes: number;
+      createdAt: string;
+      author: {
+        name: string;
+        imageUrl?: string;
+      };
+      replies: Array<{
+        id: string;
+        content: string;
+        authorId: string;
+        createdAt: string;
+        author: {
+          name: string;
+          imageUrl?: string;
+        };
+        _count: {
+          upvotes: number;
+        };
+      }>;
+      _count: {
+        upvotes: number;
+        replies: number;
+      };
+    }>>>(`/api/posts/${postId}/comments`);
+  },
+
   async upvote(id: string): Promise<ApiResponse<{ upvotes: number }>> {
     return makeApiRequest<ApiResponse<{ upvotes: number }>>(`/api/comments/${id}/upvote`, {
       method: 'POST',
+    });
+  },
+
+  async reply(commentId: string, content: string): Promise<ApiResponse<{
+    id: string;
+    content: string;
+    authorId: string;
+    postId: string;
+    createdAt: string;
+    author: {
+      name: string;
+      imageUrl?: string;
+    };
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      id: string;
+      content: string;
+      authorId: string;
+      postId: string;
+      createdAt: string;
+      author: {
+        name: string;
+        imageUrl?: string;
+      };
+    }>>(`/api/comments/${commentId}/replies`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     });
   },
 };

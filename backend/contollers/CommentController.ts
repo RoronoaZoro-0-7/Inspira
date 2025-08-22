@@ -39,6 +39,13 @@ export const addComment = async (req: Request, res: Response) => {
       }
     })
 
+    if (!profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     // Create comment
     const comment = await prisma.comment.create({
       data: {
@@ -86,6 +93,13 @@ export const addReply = async (req: Request, res: Response) => {
         userId: req.user.clerkId
       }
     });
+
+    if (!profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
   
     // Check if parent comment exists
     const parentComment = await prisma.comment.findUnique({
@@ -170,6 +184,14 @@ export const upvoteComment = async (req: Request, res: Response) => {
         userId: req.user.clerkId
       }
     });
+
+    if (!profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     // Try to create upvote (will fail if already exists due to unique constraint)
     try {
       const upvote = await prisma.commentUpvote.create({
@@ -191,9 +213,14 @@ export const upvoteComment = async (req: Request, res: Response) => {
         });
       }
 
+      // Get updated upvote count
+      const upvoteCount = await prisma.commentUpvote.count({
+        where: { commentId }
+      });
+
       res.json({
         success: true,
-        data: upvote
+        data: { upvotes: upvoteCount }
       });
     } catch (error: any) {
       if (error.code === 'P2002') {
@@ -202,14 +229,19 @@ export const upvoteComment = async (req: Request, res: Response) => {
           where: {
             commentId_userId: {
               commentId,
-              userId: req.user.profile!.id
+              userId: profile.id
             }
           }
         });
 
+        // Get updated upvote count
+        const upvoteCount = await prisma.commentUpvote.count({
+          where: { commentId }
+        });
+
         res.json({
           success: true,
-          data: { removed: true }
+          data: { upvotes: upvoteCount }
         });
       } else {
         throw error;
@@ -285,6 +317,75 @@ export const getComment = async (req: Request, res: Response) => {
     res.status(500).json({ 
       error: "Internal server error", 
       message: "Failed to get comment" 
+    });
+  }
+};
+
+// GET /posts/:id/comments - Get all comments for a post
+export const getCommentsByPostId = async (req: Request, res: Response) => {
+  try {
+    const { id: postId } = req.params;
+
+    // Check if post exists
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+
+    if (!post) {
+      return res.status(404).json({ 
+        error: "Not found", 
+        message: "Post not found" 
+      });
+    }
+
+    // Get all top-level comments (no parent) for the post
+    const comments = await prisma.comment.findMany({
+      where: { 
+        postId,
+        parentId: null // Only top-level comments
+      },
+      include: {
+        author: {
+          select: {
+            name: true,
+            imageUrl: true
+          }
+        },
+        replies: {
+          include: {
+            author: {
+              select: {
+                name: true,
+                imageUrl: true
+              }
+            },
+            _count: {
+              select: {
+                upvotes: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        _count: {
+          select: {
+            upvotes: true,
+            replies: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: comments
+    });
+  } catch (error) {
+    console.error('Get comments by post ID error:', error);
+    res.status(500).json({ 
+      error: "Internal server error", 
+      message: "Failed to get comments" 
     });
   }
 };

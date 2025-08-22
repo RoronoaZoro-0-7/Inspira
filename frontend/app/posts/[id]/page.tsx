@@ -1,3 +1,6 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -16,130 +19,15 @@ import {
   Reply,
   MoreHorizontal,
   Zap,
+  Loader2,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-
-// Mock data - in real app this would come from API based on params.id
-const mockPost = {
-  id: 1,
-  title: "How to implement authentication in Next.js 14 with App Router?",
-  content: `I'm struggling with setting up authentication in my Next.js 14 project using the new App Router. I've tried several approaches but I'm running into issues with session management and protecting routes.
-
-Here's what I've tried so far:
-
-1. **NextAuth.js** - But I'm having trouble with the middleware configuration
-2. **Clerk** - Works well but I want to understand the underlying concepts
-3. **Custom JWT implementation** - Getting complex quickly
-
-**Specific questions:**
-- What's the best way to handle server-side authentication checks?
-- How do I protect API routes in the app directory?
-- Should I use middleware or layout-level protection?
-
-Any guidance would be greatly appreciated! I'm particularly interested in understanding the security implications of different approaches.
-
-**My current setup:**
-- Next.js 14.0.3
-- TypeScript
-- Tailwind CSS
-- Prisma with PostgreSQL`,
-  author: {
-    name: "Sarah Chen",
-    email: "sarah@example.com",
-    avatar: "/sarah-avatar.png",
-    reputation: 2450,
-    badges: ["Top Contributor", "React Expert"],
-  },
-  category: "Coding",
-  tags: ["nextjs", "authentication", "app-router", "security"],
-  upvotes: 24,
-  comments: 8,
-  timeAgo: "2 hours ago",
-  isHelpful: false,
-  credits: 5,
-  isOwner: false, // In real app, check if current user is the post owner
-}
-
-const mockComments = [
-  {
-    id: 1,
-    content: `Great question! I've been working with Next.js 14 authentication for a while now. Here's my recommended approach:
-
-**For NextAuth.js with App Router:**
-
-1. Install the latest version: \`npm install next-auth@beta\`
-2. Create your auth configuration in \`app/api/auth/[...nextauth]/route.ts\`
-3. Use middleware for route protection
-
-Here's a basic setup:
-
-\`\`\`typescript
-// middleware.ts
-import { withAuth } from "next-auth/middleware"
-
-export default withAuth(
-  function middleware(req) {
-    // Add your middleware logic here
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token
-    },
-  }
-)
-
-export const config = {
-  matcher: ["/dashboard/:path*", "/api/protected/:path*"]
-}
-\`\`\`
-
-The key is understanding that with App Router, you need to handle auth differently than with Pages Router.`,
-    author: {
-      name: "Marcus Rodriguez",
-      email: "marcus@example.com",
-      avatar: "/marcus-avatar.png",
-      reputation: 1890,
-    },
-    upvotes: 12,
-    timeAgo: "1 hour ago",
-    isHelpful: true,
-    replies: [
-      {
-        id: 2,
-        content:
-          "This is exactly what I was looking for! The middleware approach makes so much sense now. Thank you for the detailed example.",
-        author: {
-          name: "Sarah Chen",
-          email: "sarah@example.com",
-          avatar: "/sarah-avatar.png",
-          reputation: 2450,
-        },
-        upvotes: 3,
-        timeAgo: "45 minutes ago",
-      },
-    ],
-  },
-  {
-    id: 3,
-    content: `I'd also recommend checking out the official Next.js authentication documentation. They have some great examples for App Router.
-
-One thing to keep in mind is that server components and client components handle auth differently. Make sure you're using the right approach for each case.
-
-For server components, you can directly access the session in your component. For client components, you'll need to use the \`useSession\` hook.`,
-    author: {
-      name: "Emily Watson",
-      email: "emily@example.com",
-      avatar: "/emily-avatar.png",
-      reputation: 3200,
-    },
-    upvotes: 8,
-    timeAgo: "30 minutes ago",
-    isHelpful: false,
-    replies: [],
-  },
-]
+import { postApi, commentApi } from "@/lib/api"
+import { toast } from "sonner"
+import type { Post } from "@/lib/api"
+import { useUser } from "@clerk/nextjs"
 
 interface PageProps {
   params: {
@@ -147,10 +35,258 @@ interface PageProps {
   }
 }
 
+interface Comment {
+  id: string;
+  content: string;
+  authorId: string;
+  postId: string;
+  createdAt: string;
+  author: {
+    name: string;
+    imageUrl?: string;
+  };
+  replies: Array<{
+    id: string;
+    content: string;
+    authorId: string;
+    createdAt: string;
+    author: {
+      name: string;
+      imageUrl?: string;
+    };
+    _count: {
+      upvotes: number;
+    };
+  }>;
+  _count: {
+    upvotes: number;
+    replies: number;
+  };
+}
+
 export default function PostDetailPage({ params }: PageProps) {
-  // In real app, fetch post data based on params.id
-  if (!mockPost) {
-    notFound()
+  const { isSignedIn, user } = useUser()
+  const [post, setPost] = useState<Post | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [commentContent, setCommentContent] = useState("")
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [isUpvotingPost, setIsUpvotingPost] = useState(false)
+  const [upvotedComments, setUpvotedComments] = useState<Set<string>>(new Set())
+  
+  // Reply state management
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false)
+
+  // Fetch post data from API
+  const fetchPost = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await postApi.getById(params.id)
+      if (response.success) {
+        setPost(response.data)
+      } else {
+        setError("Failed to fetch post")
+        toast.error("Failed to load post")
+      }
+    } catch (err) {
+      console.error("Error fetching post:", err)
+      setError("Failed to fetch post")
+      toast.error("Failed to load post")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch comments for the post
+  const fetchComments = async () => {
+    try {
+      const response = await commentApi.getByPostId(params.id)
+      if (response.success) {
+        setComments(response.data)
+      }
+    } catch (err) {
+      console.error("Error fetching comments:", err)
+    }
+  }
+
+  // Handle post upvote
+  const handlePostUpvote = async () => {
+    if (!isSignedIn) {
+      toast.error("Please sign in to upvote")
+      return
+    }
+
+    try {
+      setIsUpvotingPost(true)
+      const response = await postApi.upvote(params.id)
+      if (response.success) {
+        // Update the post's upvote count
+        setPost(prev => prev ? { ...prev, upvotes: response.data.upvotes } : null)
+        toast.success("Post upvoted!")
+      }
+    } catch (err) {
+      console.error("Error upvoting post:", err)
+      toast.error("Failed to upvote post")
+    } finally {
+      setIsUpvotingPost(false)
+    }
+  }
+
+  // Handle comment submission
+  const handleSubmitComment = async () => {
+    if (!isSignedIn) {
+      toast.error("Please sign in to comment")
+      return
+    }
+
+    if (!commentContent.trim()) {
+      toast.error("Please enter a comment")
+      return
+    }
+
+    try {
+      setIsSubmittingComment(true)
+      const response = await commentApi.create(params.id, commentContent.trim())
+      if (response.success) {
+        setCommentContent("")
+        toast.success("Comment posted!")
+        // Refresh comments
+        await fetchComments()
+      }
+    } catch (err) {
+      console.error("Error posting comment:", err)
+      toast.error("Failed to post comment")
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }
+
+  // Handle comment upvote
+  const handleCommentUpvote = async (commentId: string) => {
+    if (!isSignedIn) {
+      toast.error("Please sign in to upvote")
+      return
+    }
+
+    try {
+      const response = await commentApi.upvote(commentId)
+      if (response.success) {
+        // Update the comment's upvote count
+        setComments(prev => prev.map(comment => {
+          if (comment.id === commentId) {
+            return {
+              ...comment,
+              _count: {
+                ...comment._count,
+                upvotes: response.data.upvotes
+              }
+            }
+          }
+          return comment
+        }))
+        toast.success("Comment upvoted!")
+      }
+    } catch (err) {
+      console.error("Error upvoting comment:", err)
+      toast.error("Failed to upvote comment")
+    }
+  }
+
+  // Handle reply submission
+  const handleSubmitReply = async (commentId: string) => {
+    if (!isSignedIn) {
+      toast.error("Please sign in to reply")
+      return
+    }
+
+    if (!replyContent.trim()) {
+      toast.error("Please enter a reply")
+      return
+    }
+
+    try {
+      setIsSubmittingReply(true)
+      const response = await commentApi.reply(commentId, replyContent.trim())
+      if (response.success) {
+        setReplyContent("")
+        setReplyingTo(null)
+        toast.success("Reply posted!")
+        // Refresh comments to show the new reply
+        await fetchComments()
+      }
+    } catch (err) {
+      console.error("Error posting reply:", err)
+      toast.error("Failed to post reply")
+    } finally {
+      setIsSubmittingReply(false)
+    }
+  }
+
+  // Handle starting a reply
+  const handleStartReply = (commentId: string) => {
+    if (!isSignedIn) {
+      toast.error("Please sign in to reply")
+      return
+    }
+    setReplyingTo(commentId)
+    setReplyContent("")
+  }
+
+  // Handle canceling a reply
+  const handleCancelReply = () => {
+    setReplyingTo(null)
+    setReplyContent("")
+  }
+
+  // Fetch post and comments on component mount
+  useEffect(() => {
+    fetchPost()
+    fetchComments()
+  }, [params.id])
+
+  // Format date to relative time
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+    if (diffInSeconds < 60) return "just now"
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`
+    return date.toLocaleDateString()
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted">Loading post...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !post) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <p className="text-muted mb-4">{error || "Post not found"}</p>
+            <Button onClick={fetchPost} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -161,7 +297,7 @@ export default function PostDetailPage({ params }: PageProps) {
           Feed
         </Link>
         <span>/</span>
-        <span className="text-foreground">Post #{params.id}</span>
+        <span className="text-foreground">{post.title}</span>
       </div>
 
       {/* Main Post */}
@@ -170,25 +306,22 @@ export default function PostDetailPage({ params }: PageProps) {
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center space-x-2 mb-3">
-                <Badge variant="secondary">{mockPost.category}</Badge>
-                {mockPost.tags.map((tag) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
-                {mockPost.isHelpful && (
+                <Badge variant="secondary">
+                  {post.categoryIds.length > 0 ? post.categoryIds[0] : "General"}
+                </Badge>
+                {post.isResolved && (
                   <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
                     <CheckCircle className="w-3 h-3 mr-1" />
-                    Helpful
+                    Resolved
                   </Badge>
                 )}
               </div>
-              <CardTitle className="text-2xl font-serif leading-tight">{mockPost.title}</CardTitle>
+              <CardTitle className="text-2xl font-serif leading-tight">{post.title}</CardTitle>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline" className="text-xs">
                 <Zap className="w-3 h-3 mr-1" />
-                {mockPost.credits} credits
+                5 credits
               </Badge>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -218,35 +351,40 @@ export default function PostDetailPage({ params }: PageProps) {
           <div className="flex items-center justify-between pt-4">
             <div className="flex items-center space-x-3">
               <Avatar className="h-12 w-12">
-                <AvatarImage src={mockPost.author.avatar || "/placeholder.svg"} alt={mockPost.author.name} />
-                <AvatarFallback>{mockPost.author.name.charAt(0)}</AvatarFallback>
+                <AvatarImage src={post.author.imageUrl || "/placeholder.svg"} alt={post.author.name} />
+                <AvatarFallback>{post.author.name.charAt(0)}</AvatarFallback>
               </Avatar>
               <div>
                 <div className="flex items-center space-x-2">
-                  <p className="font-medium text-foreground">{mockPost.author.name}</p>
-                  {mockPost.author.badges.map((badge) => (
-                    <Badge key={badge} variant="secondary" className="text-xs">
-                      {badge}
-                    </Badge>
-                  ))}
+                  <p className="font-medium text-foreground">{post.author.name}</p>
+                  <Badge variant="secondary" className="text-xs">
+                    Member
+                  </Badge>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-muted">
-                  <span>{mockPost.author.reputation} reputation</span>
-                  <span>•</span>
                   <Clock className="w-3 h-3" />
-                  <span>{mockPost.timeAgo}</span>
+                  <span>{formatTimeAgo(post.createdAt)}</span>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm">
-                <ArrowUp className="w-4 h-4 mr-1" />
-                {mockPost.upvotes}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handlePostUpvote}
+                disabled={isUpvotingPost}
+              >
+                {isUpvotingPost ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <ArrowUp className="w-4 h-4 mr-1" />
+                )}
+                {post.upvotes}
               </Button>
               <Button variant="ghost" size="sm">
                 <MessageSquare className="w-4 h-4 mr-1" />
-                {mockPost.comments}
+                {comments.length}
               </Button>
             </div>
           </div>
@@ -254,7 +392,7 @@ export default function PostDetailPage({ params }: PageProps) {
 
         <CardContent>
           <div className="prose prose-gray max-w-none">
-            <div className="whitespace-pre-wrap text-foreground leading-relaxed">{mockPost.content}</div>
+            <div className="whitespace-pre-wrap text-foreground leading-relaxed">{post.content}</div>
           </div>
         </CardContent>
       </Card>
@@ -264,7 +402,7 @@ export default function PostDetailPage({ params }: PageProps) {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <MessageSquare className="w-5 h-5" />
-            <span>{mockComments.length} Answers</span>
+            <span>{comments.length} Answers</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -275,10 +413,25 @@ export default function PostDetailPage({ params }: PageProps) {
               id="comment"
               placeholder="Share your knowledge and help the community..."
               className="min-h-[120px]"
+              value={commentContent}
+              onChange={(e) => setCommentContent(e.target.value)}
+              disabled={!isSignedIn || isSubmittingComment}
             />
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted">Be helpful and constructive. Quality answers earn more credits!</p>
-              <Button>Post Answer</Button>
+              <Button 
+                onClick={handleSubmitComment}
+                disabled={!isSignedIn || isSubmittingComment || !commentContent.trim()}
+              >
+                {isSubmittingComment ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  "Post Answer"
+                )}
+              </Button>
             </div>
           </div>
 
@@ -286,103 +439,122 @@ export default function PostDetailPage({ params }: PageProps) {
 
           {/* Comments List */}
           <div className="space-y-6">
-            {mockComments.map((comment) => (
-              <div key={comment.id} className="space-y-4">
-                <div className="flex items-start space-x-4">
-                  <div className="flex flex-col items-center space-y-2">
-                    <Button variant="ghost" size="sm" className="p-1">
-                      <ArrowUp className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm font-medium">{comment.upvotes}</span>
-                    {comment.isHelpful && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-1 text-green-600 hover:text-green-700"
-                        disabled={!mockPost.isOwner}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex-1 space-y-3">
-                    <div className="bg-card border rounded-lg p-4">
-                      <div className="prose prose-gray max-w-none">
-                        <div className="whitespace-pre-wrap text-foreground leading-relaxed">{comment.content}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={comment.author.avatar || "/placeholder.svg"} alt={comment.author.name} />
-                          <AvatarFallback>{comment.author.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{comment.author.name}</p>
-                          <div className="flex items-center space-x-2 text-xs text-muted">
-                            <span>{comment.author.reputation} rep</span>
-                            <span>•</span>
-                            <span>{comment.timeAgo}</span>
-                          </div>
-                        </div>
-                      </div>
-
+            {comments.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted">No answers yet. Be the first to help!</p>
+              </div>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment.id} className="space-y-4">
+                  <div className="flex space-x-3">
+                    <Avatar className="h-8 w-8 mt-1">
+                      <AvatarImage src={comment.author.imageUrl || "/placeholder.svg"} alt={comment.author.name} />
+                      <AvatarFallback>{comment.author.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-2">
                       <div className="flex items-center space-x-2">
-                        {mockPost.isOwner && !comment.isHelpful && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 border-green-200 bg-transparent"
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Mark Helpful
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm">
+                        <p className="font-medium text-sm text-foreground">{comment.author.name}</p>
+                        <span className="text-xs text-muted">{formatTimeAgo(comment.createdAt)}</span>
+                      </div>
+                      <div className="text-sm text-foreground leading-relaxed">
+                        {comment.content}
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-muted hover:text-foreground"
+                          onClick={() => handleCommentUpvote(comment.id)}
+                        >
+                          <ArrowUp className="w-3 h-3 mr-1" />
+                          {comment._count.upvotes}
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-muted hover:text-foreground"
+                          onClick={() => handleStartReply(comment.id)}
+                        >
                           <Reply className="w-3 h-3 mr-1" />
                           Reply
                         </Button>
                       </div>
-                    </div>
-
-                    {/* Replies */}
-                    {comment.replies.length > 0 && (
-                      <div className="ml-8 space-y-4 border-l-2 border-border pl-4">
-                        {comment.replies.map((reply) => (
-                          <div key={reply.id} className="space-y-2">
-                            <div className="bg-muted/50 rounded-lg p-3">
-                              <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
-                                {reply.content}
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarImage
-                                    src={reply.author.avatar || "/placeholder.svg"}
-                                    alt={reply.author.name}
-                                  />
-                                  <AvatarFallback className="text-xs">{reply.author.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <p className="text-xs font-medium text-foreground">{reply.author.name}</p>
-                                <span className="text-xs text-muted">•</span>
-                                <span className="text-xs text-muted">{reply.timeAgo}</span>
-                              </div>
-                              <Button variant="ghost" size="sm" className="text-xs">
-                                <ArrowUp className="w-3 h-3 mr-1" />
-                                {reply.upvotes}
-                              </Button>
-                            </div>
+                      
+                      {/* Reply Form */}
+                      {replyingTo === comment.id && (
+                        <div className="mt-4 space-y-3">
+                          <Textarea
+                            placeholder="Write your reply..."
+                            className="min-h-[80px] text-sm"
+                            value={replyContent}
+                            onChange={(e) => setReplyContent(e.target.value)}
+                            disabled={isSubmittingReply}
+                          />
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              size="sm"
+                              onClick={() => handleSubmitReply(comment.id)}
+                              disabled={isSubmittingReply || !replyContent.trim()}
+                            >
+                              {isSubmittingReply ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  Posting...
+                                </>
+                              ) : (
+                                "Post Reply"
+                              )}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={handleCancelReply}
+                              disabled={isSubmittingReply}
+                            >
+                              Cancel
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      )}
+                      
+                      {/* Replies */}
+                      {comment.replies.length > 0 && (
+                        <div className="ml-6 space-y-3 mt-4">
+                          {comment.replies.map((reply) => (
+                            <div key={reply.id} className="flex space-x-3">
+                              <Avatar className="h-6 w-6 mt-1">
+                                <AvatarImage src={reply.author.imageUrl || "/placeholder.svg"} alt={reply.author.name} />
+                                <AvatarFallback>{reply.author.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-xs text-foreground">{reply.author.name}</p>
+                                  <span className="text-xs text-muted">{formatTimeAgo(reply.createdAt)}</span>
+                                </div>
+                                <div className="text-xs text-foreground leading-relaxed">
+                                  {reply.content}
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-muted hover:text-foreground h-6 px-2"
+                                    onClick={() => handleCommentUpvote(reply.id)}
+                                  >
+                                    <ArrowUp className="w-2 h-2 mr-1" />
+                                    {reply._count.upvotes}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

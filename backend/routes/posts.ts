@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireAuth } from '@clerk/express';
-import { getHome, getPosts, createPost, resolvePost, upvotePost, deletePost } from '../contollers/PostController';
+import { getHome, getPosts, getPostById, createPost, resolvePost, upvotePost, deletePost } from '../contollers/PostController';
+import { getCommentsByPostId, addComment } from '../contollers/CommentController';
 import authMiddleware from '../middlewares/authMiddleware';
 
 const router = express.Router();
@@ -8,6 +9,8 @@ const router = express.Router();
 // Public routes (no authentication required)
 router.get('/', getHome);
 router.get('/posts', getPosts);
+router.get('/:id', getPostById);
+router.get('/:id/comments', getCommentsByPostId);
 
 // Protected routes (require authentication)
 // router.use(requireAuth());
@@ -20,5 +23,8 @@ router.post('/add', createPost);
 router.patch('/:id/resolve', resolvePost);
 router.post('/:id/upvote', upvotePost);
 router.delete('/delete/:id', deletePost);
+
+// Comment actions
+router.post('/:id/comments', addComment);
 
 export default router;

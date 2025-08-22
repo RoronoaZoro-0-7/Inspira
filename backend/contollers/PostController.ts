@@ -114,6 +114,52 @@ export const getPosts = async (req: Request, res: Response) => {
   }
 };
 
+// GET /posts/:id - Get a single post by ID
+export const getPostById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            name: true,
+            imageUrl: true
+          }
+        },
+        categories: true,
+        _count: {
+          select: {
+            comments: true,
+            upvotes: true
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: "Post not found",
+        message: "The requested post does not exist"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: post
+    });
+  } catch (error) {
+    console.error('Get post by ID error:', error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: "Failed to get post"
+    });
+  }
+};
+
 // POST /posts - Create a post
 export const createPost = async (req: Request, res: Response) => {
   try {
@@ -417,9 +463,14 @@ export const upvotePost = async (req: Request, res: Response) => {
         }
       });
 
+      // Get updated upvote count
+      const upvoteCount = await prisma.postUpvote.count({
+        where: { postId: id }
+      });
+
       res.json({
         success: true,
-        data: upvote
+        data: { upvotes: upvoteCount }
       });
     } catch (error: any) {
       if (error.code === 'P2002') {
@@ -433,9 +484,14 @@ export const upvotePost = async (req: Request, res: Response) => {
           }
         });
 
+        // Get updated upvote count
+        const upvoteCount = await prisma.postUpvote.count({
+          where: { postId: id }
+        });
+
         res.json({
           success: true,
-          data: { removed: true }
+          data: { upvotes: upvoteCount }
         });
       } else {
         throw error;
