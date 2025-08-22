@@ -6,6 +6,11 @@ import { Webhook } from 'svix';
 import authMiddleware from "./middlewares/authMiddleware";
 import { PrismaClient } from "@prisma/client";
 
+// Import routes
+import authRoutes from "./routes/auth";
+import postRoutes from "./routes/posts";
+import commentRoutes from "./routes/comments";
+
 dotenv.config();
 
 const prisma = new PrismaClient();
@@ -118,18 +123,10 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
   res.status(200).json({ success: true });
 });
 
-app.get("/", (req, res) => {
-    res.send("Hello World");
-});
-
-
-app.get("/protectedWithOutDbCall", requireAuth(), (req, res) => {
-    res.send("Hello World");
-});
-
-app.get("/protected", requireAuth(), authMiddleware, (req, res) => {
-    res.json({ message: "Protected route", user: req.user });
-});
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/post', postRoutes);
+app.use('/api/comment', commentRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

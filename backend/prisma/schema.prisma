@@ -33,13 +33,13 @@ enum CreditTxType {
 //
 
 model User {
-  id      String @id @default(cuid())
-  clerkId String @unique
-  email   String @unique
-  role    Role   @default(USER)
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  role      Role     @default(USER)
+  profileId String?  @unique // Optional foreign key to Profile, must be unique for 1:1
+  profile   Profile? @relation(fields: [profileId], references: [id])
 
-  profile Profile?
-  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -50,7 +50,7 @@ model User {
 model Profile {
   id       String  @id @default(cuid())
   userId   String  @unique
-  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User?
 
   name     String?
   imageUrl String?
@@ -83,7 +83,7 @@ model Category {
 }
 
 model Post {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   authorId String
   author   Profile   @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
