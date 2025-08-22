@@ -19,11 +19,6 @@ enum Role {
   ADMIN
 }
 
-enum PostStatus {
-  OPEN
-  RESOLVED
-  CLOSED
-}
 
 enum CreditTxType {
   STARTER_GRANT // initial credits on signup
@@ -84,19 +79,14 @@ model Post {
   authorId String
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryIds String[]
+  categories Category[]
 
   title   String
   content String // Markdown/serialized content
-  status  PostStatus @default(OPEN)
-
-  // Economy knobs (set once on creation)
-  postCost      Int @default(2) // credits charged to create post
-  helpfulReward Int @default(5) // credits transferred when marked helpful
 
   // Optional denormalized pointer for quick reads
-  helpfulCommentId String? @unique // set once when resolved; ensures one helpful per post
+  helpfulCommentIds String[] // can store multiple helpful comment IDs
 
   comments    Comment[]
   upvotes     PostUpvote[]
@@ -107,7 +97,7 @@ model Post {
   CreditTransaction CreditTransaction[]
 
   @@index([authorId, createdAt])
-  @@index([status, createdAt])
+  // @@index([status, createdAt]) removed
   @@index([categoryId, createdAt])
 }
 
@@ -229,8 +219,4 @@ model CreditTransaction {
   @@index([type, createdAt])
   @@index([postId])
   @@index([commentId])
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> fe884b611201a1d3eafce54c260f7ca2d5ed00ec
