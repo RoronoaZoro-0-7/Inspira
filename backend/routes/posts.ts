@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth } from '@clerk/express';
-import { getHome, getPosts, createPost, resolvePost, upvotePost } from '../contollers/PostController';
+import { getHome, getPosts, createPost, resolvePost, upvotePost, deletePost } from '../contollers/PostController';
 import authMiddleware from '../middlewares/authMiddleware';
 
 const router = express.Router();
@@ -14,10 +14,11 @@ router.use(requireAuth());
 router.use(authMiddleware);
 
 // Create post
-router.post('/posts', createPost);
+router.post('/add', createPost);
 
 // Post actions
-router.patch('/posts/:id/resolve', resolvePost);
-router.post('/posts/:id/upvote', upvotePost);
+router.patch('/:id/resolve', resolvePost);
+router.post('/:id/upvote', upvotePost);
+router.delete('/delete/:id', deletePost);
 
 export default router;
