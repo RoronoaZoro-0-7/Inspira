@@ -146,7 +146,7 @@ class ChatWebSocketServer {
       orderBy: { updatedAt: 'desc' }
     });
 
-    return conversations.map(conversation => {
+  return conversations.map((conversation: any) => {
       const isParticipant1 = conversation.participant1Id === profileId;
       const otherParticipant = isParticipant1 ? conversation.participant2 : conversation.participant1;
       

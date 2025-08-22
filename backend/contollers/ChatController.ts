@@ -52,7 +52,7 @@ export const getConversations = async (req: Request, res: Response) => {
     });
 
     // Transform conversations to show the other participant
-    const transformedConversations = conversations.map(conversation => {
+  const transformedConversations = conversations.map((conversation: any) => {
       const isParticipant1 = conversation.participant1Id === req.user.profile!.id;
       const otherParticipant = isParticipant1 ? conversation.participant2 : conversation.participant1;
       
@@ -136,13 +136,13 @@ export const getMessages = async (req: Request, res: Response) => {
 
     // Mark messages as read if they're from the other participant
     const unreadMessages = messages.filter(
-      msg => msg.senderId !== req.user.profile!.id && !msg.isRead
+      (msg: any) => msg.senderId !== req.user.profile!.id && !msg.isRead
     );
 
     if (unreadMessages.length > 0) {
       await prisma.chatMessage.updateMany({
         where: {
-          id: { in: unreadMessages.map(msg => msg.id) }
+          id: { in: unreadMessages.map((msg: any) => msg.id) }
         },
         data: {
           isRead: true,
@@ -211,7 +211,7 @@ export const sendMessage = async (req: Request, res: Response) => {
     }
 
     // Create message and update conversation
-    const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
       const message = await tx.chatMessage.create({
         data: {
           conversationId,
