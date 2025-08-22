@@ -24,9 +24,11 @@ const authMiddleware = async function(req: Request, res: Response, next: NextFun
      const clerkId = "user_31eMxGjCvxqUIb4vg87bzqhN6j1";
   const user = await prisma.user.findUnique({
     where: {
-      clerkId
+      clerkId:clerkId
     }
   });
+  console.log(user);
+  
   if (!user) {
     return res.status(401).json({ message: "Unauthorized" });
   }
