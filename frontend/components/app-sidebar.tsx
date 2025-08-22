@@ -29,7 +29,6 @@ import {
   PenTool,
   TrendingUp,
   Zap,
-  Search,
   Bell,
 } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
@@ -74,14 +73,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/search">
-                    <Search className="w-4 h-4" />
-                    Search
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link href="/notifications">

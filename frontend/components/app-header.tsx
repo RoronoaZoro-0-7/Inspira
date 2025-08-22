@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, Bell, Plus, Zap, User, Settings, CreditCard, MessageSquare } from "lucide-react"
+import { Bell, Plus, Zap, User, Settings, CreditCard, MessageSquare } from "lucide-react"
 import { useUser, SignOutButton } from "@clerk/nextjs"
 import Link from "next/link"
 
@@ -33,19 +33,7 @@ export function AppHeader() {
           <span className="text-xl font-serif font-bold text-foreground">Inspira</span>
         </Link>
 
-        {/* Search Bar */}
-        <div className="flex-1 max-w-md mx-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted w-4 h-4" />
-            <Link href="/search">
-              <Input
-                placeholder="Search questions, topics, or users..."
-                className="pl-10 bg-card cursor-pointer"
-                readOnly
-              />
-            </Link>
-          </div>
-        </div>
+
 
         {/* Right Side Actions */}
         <div className="flex items-center space-x-4">

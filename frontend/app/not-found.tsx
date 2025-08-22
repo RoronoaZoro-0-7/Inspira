@@ -26,9 +26,9 @@ export default function NotFound() {
               </Link>
             </Button>
             <Button variant="outline" asChild className="flex items-center gap-2 bg-transparent">
-              <Link href="/search">
+              <Link href="/feed">
                 <Search className="h-4 w-4" />
-                Search
+                Browse Feed
               </Link>
             </Button>
           </div>

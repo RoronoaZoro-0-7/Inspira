@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MessageSquare, ArrowUp, Clock, CheckCircle, Filter, Plus, Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { MessageSquare, ArrowUp, Clock, CheckCircle, Filter, Plus, Loader2, Search } from "lucide-react"
 import Link from "next/link"
 import { postApi } from "@/lib/api"
 import { toast } from "sonner"
@@ -21,6 +22,17 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState("newest")
   const [category, setCategory] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+
+  // Debounce search query for better performance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Fetch posts from API
   const fetchPosts = async () => {
@@ -64,8 +76,25 @@ export default function FeedPage() {
   // Filter and sort posts
   const filteredAndSortedPosts = posts
     .filter(post => {
-      if (category === "all") return true
-      // You can implement category filtering here when categories are available
+      // Search filter
+      if (debouncedSearchQuery.trim()) {
+        const query = debouncedSearchQuery.toLowerCase()
+        const matchesTitle = post.title.toLowerCase().includes(query)
+        const matchesContent = post.content.toLowerCase().includes(query)
+        const matchesAuthor = post.author.name.toLowerCase().includes(query)
+        const matchesCategory = post.categoryIds.some(cat => cat.toLowerCase().includes(query))
+        
+        if (!matchesTitle && !matchesContent && !matchesAuthor && !matchesCategory) {
+          return false
+        }
+      }
+      
+      // Category filter
+      if (category !== "all") {
+        // You can implement category filtering here when categories are available
+        return true
+      }
+      
       return true
     })
     .sort((a, b) => {
@@ -151,9 +180,20 @@ export default function FeedPage() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted w-4 h-4" />
+        <Input
+          placeholder="Search posts, topics, or authors..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {/* Filters */}
       <div className="flex items-center space-x-4">
-        <Select defaultValue="newest">
+        <Select value={sortBy} onValueChange={setSortBy}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
@@ -185,11 +225,41 @@ export default function FeedPage() {
         </Button>
       </div>
 
+      {/* Search Results Info */}
+      {debouncedSearchQuery.trim() && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted">
+            {filteredAndSortedPosts.length} result{filteredAndSortedPosts.length !== 1 ? 's' : ''} for "{debouncedSearchQuery}"
+          </p>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setSearchQuery("")}
+          >
+            Clear Search
+          </Button>
+        </div>
+      )}
+
       {/* Posts Feed */}
       <div className="space-y-4">
         {filteredAndSortedPosts.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-muted mb-4">No posts found</p>
+            <p className="text-muted mb-4">
+              {debouncedSearchQuery.trim() 
+                ? `No posts found for "${debouncedSearchQuery}"` 
+                : "No posts found"
+              }
+            </p>
+            {debouncedSearchQuery.trim() ? (
+              <Button 
+                variant="outline" 
+                onClick={() => setSearchQuery("")}
+                className="mr-2"
+              >
+                Clear Search
+              </Button>
+            ) : null}
             <Button asChild>
               <Link href="/create">
                 <Plus className="w-4 h-4 mr-2" />
