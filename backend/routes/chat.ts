@@ -13,7 +13,7 @@ import authMiddleware from '../middlewares/authMiddleware';
 const router = express.Router();
 
 // All chat routes require authentication
-router.use(requireAuth());
+// router.use(requireAuth());
 router.use(authMiddleware);
 
 // Conversations

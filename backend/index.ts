@@ -5,13 +5,14 @@ import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { Webhook } from 'svix';
 import authMiddleware from "./middlewares/authMiddleware";
 import { PrismaClient } from "@prisma/client";
-import { deleteAccount } from "./contollers/AuthController";
+import { createServer } from 'http';
 
 // Import routes
 import authRoutes from "./routes/auth";
 import postRoutes from "./routes/posts";
 import commentRoutes from "./routes/comments";
 import chatRoutes from "./routes/chat";
+import { deleteAccount } from "./contollers/AuthController";
 
 // Import WebSocket server
 import ChatWebSocketServer from "./utils/websocket";
@@ -52,14 +53,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Clerk middleware with error handling
-try {
-  app.use(clerkMiddleware());
-  console.log('✅ Clerk middleware initialized successfully');
-} catch (error) {
-  console.error('❌ Failed to initialize Clerk middleware:', error);
-  console.error('📝 Please check your CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY');
-  process.exit(1);
-}
+// try {
+//   app.use(clerkMiddleware());
+//   console.log('✅ Clerk middleware initialized successfully');
+// } catch (error) {
+//   console.error('❌ Failed to initialize Clerk middleware:', error);
+//   console.error('📝 Please check your CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY');
+//   process.exit(1);
+// }
 
 // Webhook endpoint for Clerk user sync
 app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -157,8 +158,20 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+// Create HTTP server
+const server = createServer(app);
+
+// Initialize WebSocket server
+const chatWebSocket = new ChatWebSocketServer(server);
+
+// Make WebSocket server available globally
+(global as any).chatWebSocket = chatWebSocket;
+
+server.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`🔌 WebSocket URL: ws://localhost:${PORT}`);
 });
 
 export default prisma;

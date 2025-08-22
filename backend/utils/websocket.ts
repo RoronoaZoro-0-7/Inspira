@@ -40,46 +40,89 @@ class ChatWebSocketServer {
         const url = new URL(req.url!, `http://${req.headers.host}`);
         const token = url.searchParams.get('token') || req.headers.authorization?.replace('Bearer ', '');
 
-        if (!token) {
-          ws.close(1008, 'Authentication required');
-          return;
+        let profileId: string | null = null;
+        let isAuthenticated = false;
+
+        // Try to authenticate if token is provided
+        if (token) {
+          try {
+            const { userId } = await this.verifyToken(token);
+            if (userId) {
+              const user = await prisma.user.findUnique({
+                where: { clerkId: userId },
+                include: { profile: true }
+              });
+
+              if (user?.profile) {
+                profileId = user.profile.id;
+                isAuthenticated = true;
+                console.log(`Authenticated user ${profileId} connected to WebSocket`);
+              } else {
+                console.log(`Token provided but user profile not found`);
+                ws.close(1008, 'User profile not found');
+                return;
+              }
+            } else {
+              console.log(`Invalid token provided`);
+              ws.close(1008, 'Invalid token');
+              return;
+            }
+          } catch (error) {
+            console.log(`Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            ws.close(1008, 'Token verification failed');
+            return;
+          }
+        } else {
+          // No token provided - use test user for development/testing
+          profileId = 'test-user-' + Date.now();
+          isAuthenticated = false;
+          console.log(`No token provided, using test user ${profileId}`);
         }
 
-        // Verify user with Clerk
-        const { userId } = await this.verifyToken(token);
-        if (!userId) {
-          ws.close(1008, 'Invalid token');
-          return;
-        }
-
-        // Get user profile
-        const user = await prisma.user.findUnique({
-          where: { clerkId: userId },
-          include: { profile: true }
-        });
-
-        if (!user?.profile) {
-          ws.close(1008, 'User profile not found');
-          return;
-        }
-
-        const profileId = user.profile.id;
         this.clients.set(profileId, ws);
         this.userConversations.set(profileId, new Set());
 
-        console.log(`User ${profileId} connected to WebSocket`);
+        console.log(`User ${profileId} connected to WebSocket (${isAuthenticated ? 'authenticated' : 'test user'})`);
 
-        // Send user's active conversations
-        const conversations = await this.getUserConversations(profileId);
+        // Send welcome message
         ws.send(JSON.stringify({
-          type: 'conversations',
-          data: conversations
+          type: 'welcome',
+          data: { 
+            message: 'Connected to chat server',
+            userId: profileId,
+            isAuthenticated: isAuthenticated,
+            timestamp: new Date().toISOString()
+          }
         }));
+
+        // Send user's active conversations (if authenticated)
+        if (isAuthenticated) {
+          try {
+            const conversations = await this.getUserConversations(profileId);
+            ws.send(JSON.stringify({
+              type: 'conversations',
+              data: conversations
+            }));
+          } catch (error) {
+            console.error('Error fetching conversations:', error);
+            ws.send(JSON.stringify({
+              type: 'conversations',
+              data: []
+            }));
+          }
+        } else {
+          // For test users, send empty conversations
+          ws.send(JSON.stringify({
+            type: 'conversations',
+            data: []
+          }));
+        }
 
         ws.on('message', async (data: Buffer) => {
           try {
             const message: WebSocketMessage = JSON.parse(data.toString());
-            await this.handleMessage(profileId, message);
+            console.log(`Received message from ${profileId}:`, message);
+            await this.handleMessage(profileId, message, isAuthenticated);
           } catch (error) {
             console.error('Error handling WebSocket message:', error);
             ws.send(JSON.stringify({
@@ -159,7 +202,30 @@ class ChatWebSocketServer {
     });
   }
 
-  private async handleMessage(profileId: string, message: WebSocketMessage) {
+  private async handleMessage(profileId: string, message: WebSocketMessage, isAuthenticated: boolean) {
+    console.log(`Handling message from ${profileId} (${isAuthenticated ? 'authenticated' : 'test user'}):`, message);
+    
+    // For test users, just log the message and send a confirmation
+    if (!isAuthenticated) {
+      console.log(`Test user ${profileId} sent message:`, message);
+      
+      // Send confirmation back to test user
+      const ws = this.clients.get(profileId);
+      if (ws) {
+        ws.send(JSON.stringify({
+          type: 'message_received',
+          data: {
+            originalMessage: message,
+            timestamp: new Date().toISOString(),
+            status: 'processed',
+            note: 'Test user - message logged only'
+          }
+        }));
+      }
+      return;
+    }
+
+    // For authenticated users, process normally
     switch (message.type) {
       case 'join':
         await this.handleJoinConversation(profileId, message.data.conversationId);
@@ -196,6 +262,8 @@ class ChatWebSocketServer {
         userConversations.add(conversationId);
       }
       console.log(`User ${profileId} joined conversation ${conversationId}`);
+    } else {
+      console.log(`User ${profileId} attempted to join non-existent conversation ${conversationId}`);
     }
   }
 
