@@ -141,10 +141,8 @@ export default function ChatPage() {
       const response = await chatApi.getMessages(conversationId)
       if (response.success) {
         setMessages(response.data.messages)
-        // Scroll to bottom after messages load
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
+        // Don't auto-scroll to bottom when loading messages
+        // Users can scroll manually to see latest messages
       } else {
         toast.error("Failed to load messages")
       }
@@ -256,10 +254,8 @@ export default function ChatPage() {
             console.log('Message already exists, not adding')
             return prev
           })
-          // Scroll to bottom for new message
-          setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-          }, 100)
+          // Don't auto-scroll to bottom for new messages
+          // Users can scroll manually to see new messages
         } else {
           console.log('Message does not match current conversation or no conversation selected')
           // If no conversation is selected, try to find and select the conversation
