@@ -12,6 +12,7 @@ import authRoutes from "./routes/auth";
 import postRoutes from "./routes/posts";
 import commentRoutes from "./routes/comments";
 import chatRoutes from "./routes/chat";
+import paymentRoutes from "./routes/payments";
 import { deleteAccount } from "./contollers/AuthController";
 import { initializeDefaultCategories, fixExistingPostCategories } from "./contollers/PostController";
 
@@ -125,6 +126,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
                 ? `${attributes.first_name} ${attributes.last_name}`
                 : attributes.first_name || attributes.last_name || null,
               imageUrl: attributes.image_url || null,
+              credits: 100,
             }
           }
         },
@@ -145,6 +147,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

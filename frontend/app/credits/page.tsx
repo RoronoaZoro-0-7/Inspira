@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useCredits } from "@/contexts/CreditsContext"
-import { userApi } from "@/lib/api"
+import { userApi, paymentApi } from "@/lib/api"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 
@@ -62,10 +62,20 @@ const transactionTypes = {
 }
 
 export default function CreditsPage() {
-  const { credits, loading } = useCredits()
+  const { credits, loading, refreshCredits } = useCredits()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(true)
   const [transactionsError, setTransactionsError] = useState<string | null>(null)
+  const [packages, setPackages] = useState<Array<{
+    id: string;
+    name: string;
+    credits: number;
+    price: number;
+    priceInRupees: string;
+    pricePerCredit: string;
+  }>>([])
+  const [packagesLoading, setPackagesLoading] = useState(true)
+  const [processingPayment, setProcessingPayment] = useState(false)
   
   const currentBalance = credits || 0
   const weeklyEarned = 25 // This would be calculated from real data
@@ -92,9 +102,102 @@ export default function CreditsPage() {
     }
   }
 
-  // Fetch transactions on component mount
+  // Fetch packages
+  const fetchPackages = async () => {
+    try {
+      setPackagesLoading(true)
+      const response = await paymentApi.getPackages()
+      if (response.success) {
+        setPackages(response.data)
+      } else {
+        toast.error("Failed to load packages")
+      }
+    } catch (err) {
+      console.error("Error fetching packages:", err)
+      toast.error("Failed to load packages")
+    } finally {
+      setPackagesLoading(false)
+    }
+  }
+
+  // Handle payment
+  const handlePayment = async (packageType: string) => {
+    try {
+      setProcessingPayment(true)
+      
+      // Create order
+      const orderResponse = await paymentApi.createOrder(packageType)
+      if (!orderResponse.success) {
+        toast.error("Failed to create order")
+        return
+      }
+
+      const order = orderResponse.data
+
+      // Load Razorpay script
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      document.body.appendChild(script)
+
+      script.onload = () => {
+        const options = {
+          key: 'rzp_test_6rL5AjtWiQh42x', // Your Razorpay key
+          amount: order.amount,
+          currency: order.currency,
+          name: 'Inspira',
+          description: `${order.packageName} - ${order.credits} Credits`,
+          order_id: order.orderId,
+          handler: async function (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) {
+            try {
+              // Verify payment
+              const verifyResponse = await paymentApi.verifyPayment({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                packageType: packageType,
+              })
+
+              if (verifyResponse.success) {
+                toast.success(`Payment successful! ${verifyResponse.data.creditsAdded} credits added to your account.`)
+                refreshCredits() // Refresh credits
+                fetchTransactions() // Refresh transactions
+              } else {
+                toast.error("Payment verification failed")
+              }
+            } catch (err) {
+              console.error("Payment verification error:", err)
+              toast.error("Payment verification failed")
+            }
+          },
+          prefill: {
+            name: 'User Name',
+            email: 'user@example.com',
+          },
+          theme: {
+            color: '#3b82f6',
+          },
+        }
+
+        const rzp = new window.Razorpay(options)
+        rzp.open()
+      }
+    } catch (err) {
+      console.error("Payment error:", err)
+      toast.error("Payment failed")
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  // Fetch data on component mount
   useEffect(() => {
     fetchTransactions()
+    fetchPackages()
   }, [])
 
   const formatDate = (timestamp: string) => {
@@ -473,55 +576,49 @@ export default function CreditsPage() {
               <CardDescription>Buy credits to continue posting and engaging with the community</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-2 border-border">
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-lg">Starter Pack</CardTitle>
-                    <div className="text-3xl font-bold text-primary">50</div>
-                    <CardDescription>credits</CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-center space-y-4">
-                    <div className="text-2xl font-bold">$4.99</div>
-                    <div className="text-sm text-muted">$0.10 per credit</div>
-                    <Button className="w-full bg-transparent" variant="outline">
-                      Purchase
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 border-primary relative">
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
-                  </div>
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-lg">Value Pack</CardTitle>
-                    <div className="text-3xl font-bold text-primary">150</div>
-                    <CardDescription>credits</CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-center space-y-4">
-                    <div className="text-2xl font-bold">$12.99</div>
-                    <div className="text-sm text-muted">$0.087 per credit</div>
-                    <div className="text-xs text-green-600 font-medium">Save 13%</div>
-                    <Button className="w-full">Purchase</Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 border-border">
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-lg">Pro Pack</CardTitle>
-                    <div className="text-3xl font-bold text-primary">300</div>
-                    <CardDescription>credits</CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-center space-y-4">
-                    <div className="text-2xl font-bold">$19.99</div>
-                    <div className="text-sm text-muted">$0.067 per credit</div>
-                    <div className="text-xs text-green-600 font-medium">Save 33%</div>
-                    <Button className="w-full bg-transparent" variant="outline">
-                      Purchase
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
+              {packagesLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted">Loading packages...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {packages.map((pkg, index) => (
+                    <Card 
+                      key={pkg.id} 
+                      className={`border-2 ${pkg.id === 'value' ? 'border-primary relative' : 'border-border'}`}
+                    >
+                      {pkg.id === 'value' && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
+                        </div>
+                      )}
+                      <CardHeader className="text-center">
+                        <CardTitle className="text-lg">{pkg.name}</CardTitle>
+                        <div className="text-3xl font-bold text-primary">{pkg.credits}</div>
+                        <CardDescription>credits</CardDescription>
+                      </CardHeader>
+                      <CardContent className="text-center space-y-4">
+                        <div className="text-2xl font-bold">₹{pkg.priceInRupees}</div>
+                        <div className="text-sm text-muted">₹{pkg.pricePerCredit} per credit</div>
+                        {pkg.id === 'value' && (
+                          <div className="text-xs text-green-600 font-medium">Save 13%</div>
+                        )}
+                        {pkg.id === 'pro' && (
+                          <div className="text-xs text-green-600 font-medium">Save 33%</div>
+                        )}
+                        <Button 
+                          className={`w-full ${pkg.id === 'value' ? '' : 'bg-transparent'}`}
+                          variant={pkg.id === 'value' ? 'default' : 'outline'}
+                          onClick={() => handlePayment(pkg.id)}
+                          disabled={processingPayment}
+                        >
+                          {processingPayment ? 'Processing...' : 'Purchase'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-8 p-4 bg-muted/50 rounded-lg">
                 <h3 className="font-medium text-foreground mb-2">Why Purchase Credits?</h3>
@@ -529,7 +626,7 @@ export default function CreditsPage() {
                   <li>• Continue asking questions when you run low on earned credits</li>
                   <li>• Support the community and platform development</li>
                   <li>• Get instant access to post without waiting to earn credits</li>
-                  <li>• All purchases are secure and processed through Stripe</li>
+                  <li>• All purchases are secure and processed through Razorpay</li>
                 </ul>
               </div>
             </CardContent>

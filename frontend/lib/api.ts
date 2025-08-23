@@ -180,6 +180,70 @@ export const userApi = {
   },
 };
 
+// Payment API functions
+export const paymentApi = {
+  async getPackages(): Promise<ApiResponse<Array<{
+    id: string;
+    name: string;
+    credits: number;
+    price: number;
+    priceInRupees: string;
+    pricePerCredit: string;
+  }>>> {
+    return makeApiRequest<ApiResponse<Array<{
+      id: string;
+      name: string;
+      credits: number;
+      price: number;
+      priceInRupees: string;
+      pricePerCredit: string;
+    }>>>('/api/payments/packages');
+  },
+
+  async createOrder(packageType: string): Promise<ApiResponse<{
+    orderId: string;
+    amount: number;
+    currency: string;
+    packageType: string;
+    credits: number;
+    packageName: string;
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      orderId: string;
+      amount: number;
+      currency: string;
+      packageType: string;
+      credits: number;
+      packageName: string;
+    }>>('/api/payments/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ packageType }),
+    });
+  },
+
+  async verifyPayment(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    packageType: string;
+  }): Promise<ApiResponse<{
+    message: string;
+    creditsAdded: number;
+    newBalance: number;
+    transactionId: string;
+  }>> {
+    return makeApiRequest<ApiResponse<{
+      message: string;
+      creditsAdded: number;
+      newBalance: number;
+      transactionId: string;
+    }>>('/api/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Chat API functions
 export const chatApi = {
   async getConversations(): Promise<ApiResponse<Array<{
