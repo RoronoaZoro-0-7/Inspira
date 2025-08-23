@@ -26,7 +26,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
-import { chatApi } from "@/lib/api"
+import { chatApi, userApi } from "@/lib/api"
 
 // Interfaces for chat data
 interface ChatUser {
@@ -84,21 +84,44 @@ export default function ChatPage() {
   }>>([])
   const [searching, setSearching] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const selectedConversationRef = useRef<Conversation | null>(null)
+
+  // Fetch current user profile ID
+  const fetchCurrentUserProfile = async () => {
+    try {
+      console.log('Fetching current user profile...')
+      const response = await userApi.getProfile()
+      console.log('Profile response:', response)
+      if (response.success && response.data) {
+        setCurrentUserProfileId(response.data.id)
+        console.log('Current user profile ID set:', response.data.id)
+      }
+    } catch (err) {
+      console.error("Error fetching current user profile:", err)
+    }
+  }
 
   // Fetch conversations
   const fetchConversations = async () => {
     try {
       setLoading(true)
       setError(null)
+      console.log('Fetching conversations...')
       const response = await chatApi.getConversations()
+      console.log('Conversations response:', response)
       if (response.success) {
+        console.log('Fetched conversations:', response.data.length)
         setConversations(response.data)
         if (response.data.length > 0 && !selectedConversation) {
+          console.log('Setting first conversation as selected:', response.data[0].id)
           setSelectedConversation(response.data[0])
+          selectedConversationRef.current = response.data[0]
         }
       } else {
+        console.log('Failed to fetch conversations:', response)
         setError("Failed to fetch conversations")
         toast.error("Failed to load conversations")
       }
@@ -145,16 +168,19 @@ export default function ChatPage() {
         
         // Join the current conversation if one is selected
         if (selectedConversation) {
-          websocket.send(JSON.stringify({
+          const joinMessage = {
             type: 'join',
             data: { conversationId: selectedConversation.id }
-          }))
+          }
+          console.log('Joining conversation:', joinMessage)
+          websocket.send(JSON.stringify(joinMessage))
         }
       }
       
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
+          console.log('WebSocket message received:', data)
           handleWebSocketMessage(data)
         } catch (error) {
           console.error('Error parsing WebSocket message:', error)
@@ -202,14 +228,52 @@ export default function ChatPage() {
   const handleWebSocketMessage = (data: any) => {
     switch (data.type) {
       case 'new_message':
-        if (data.data.conversationId === selectedConversation?.id) {
-          setMessages(prev => [...prev, data.data])
+        console.log('Processing new message:', data.data)
+        console.log('Current selected conversation (state):', selectedConversation?.id)
+        console.log('Current selected conversation (ref):', selectedConversationRef.current?.id)
+        console.log('Message conversation ID:', data.data.conversationId)
+        
+        // Always update conversation list regardless of current selection
+        updateConversationList(data.data)
+        
+        // Use ref for immediate access to current conversation
+        const currentConversation = selectedConversationRef.current || selectedConversation
+        
+        // If we have a selected conversation and it matches, add to messages
+        if (currentConversation && data.data.conversationId === currentConversation.id) {
+          console.log('Message matches current conversation, adding to messages')
+          // Check if message already exists to avoid duplicates
+          setMessages(prev => {
+            console.log('Current messages count:', prev.length)
+            const messageExists = prev.some(msg => msg.id === data.data.id)
+            console.log('Message already exists:', messageExists)
+            if (!messageExists) {
+              console.log('Adding new message to state')
+              const newMessages = [...prev, data.data]
+              console.log('New messages count:', newMessages.length)
+              return newMessages
+            }
+            console.log('Message already exists, not adding')
+            return prev
+          })
           // Scroll to bottom for new message
           setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
           }, 100)
+        } else {
+          console.log('Message does not match current conversation or no conversation selected')
+          // If no conversation is selected, try to find and select the conversation
+          if (!currentConversation) {
+            const conversation = conversations.find(c => c.id === data.data.conversationId)
+            if (conversation) {
+              console.log('Auto-selecting conversation:', conversation.id)
+              setSelectedConversation(conversation)
+              selectedConversationRef.current = conversation
+              // Fetch messages for this conversation
+              fetchMessages(conversation.id)
+            }
+          }
         }
-        updateConversationList(data.data)
         break
       case 'typing':
         // Handle typing indicators
@@ -228,19 +292,18 @@ export default function ChatPage() {
     try {
       const response = await chatApi.sendMessage(selectedConversation.id, newMessage.trim())
       if (response.success) {
-        // Add the new message with proper type
+        // Clear the input immediately for better UX
+        setNewMessage("")
+        
+        // The message will be added via WebSocket notification
+        // This ensures real-time updates work properly
+        
+        // Update conversation list
         const newMessageData: Message = {
           ...response.data,
           isRead: false,
           readAt: undefined
         }
-        setMessages(prev => [...prev, newMessageData])
-        setNewMessage("")
-        // Scroll to bottom
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
-        // Update conversation list
         updateConversationList(newMessageData)
       } else {
         toast.error("Failed to send message")
@@ -254,15 +317,18 @@ export default function ChatPage() {
   // Handle conversation selection
   const handleConversationSelect = (conversation: Conversation) => {
     setSelectedConversation(conversation)
+    selectedConversationRef.current = conversation
     fetchMessages(conversation.id)
     setIsMobileView(true)
     
     // Join the conversation via WebSocket
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
+      const joinMessage = {
         type: 'join',
         data: { conversationId: conversation.id }
-      }))
+      }
+      console.log('Joining conversation on selection:', joinMessage)
+      ws.send(JSON.stringify(joinMessage))
     }
   }
 
@@ -290,9 +356,14 @@ export default function ChatPage() {
 
   // Initialize data and WebSocket connection
   useEffect(() => {
+    console.log('Current user state:', currentUser)
     if (currentUser) {
+      console.log('User is signed in, fetching data...')
+      fetchCurrentUserProfile()
       fetchConversations()
       connectWebSocket()
+    } else {
+      console.log('User is not signed in')
     }
   }, [currentUser])
 
@@ -303,13 +374,29 @@ export default function ChatPage() {
       
       // Join the conversation via WebSocket if connected
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
+        const joinMessage = {
           type: 'join',
           data: { conversationId: selectedConversation.id }
-        }))
+        }
+        console.log('Joining conversation in useEffect:', joinMessage)
+        ws.send(JSON.stringify(joinMessage))
       }
     }
   }, [selectedConversation?.id, ws])
+
+  // Monitor messages state changes
+  useEffect(() => {
+    console.log('Messages state updated:', messages.length, 'messages')
+  }, [messages])
+
+  // Auto-select first conversation if none is selected
+  useEffect(() => {
+    if (conversations.length > 0 && !selectedConversation) {
+      console.log('Auto-selecting first conversation:', conversations[0].id)
+      setSelectedConversation(conversations[0])
+      selectedConversationRef.current = conversations[0]
+    }
+  }, [conversations, selectedConversation])
 
   // Search users
   const searchUsers = async (query: string) => {
@@ -596,7 +683,9 @@ export default function ChatPage() {
                 ) : (
                   <div className="space-y-4">
                     {messages.map((message) => {
-                      const isCurrentUser = message.senderId === currentUser?.id
+                      // Check if the message sender is the current user
+                      const isCurrentUser = message.senderId === currentUserProfileId
+                      
                       return (
                         <div key={message.id} className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
                           <div className={`flex items-end space-x-2 max-w-xs lg:max-w-md`}>
