@@ -13,6 +13,7 @@ import postRoutes from "./routes/posts";
 import commentRoutes from "./routes/comments";
 import chatRoutes from "./routes/chat";
 import { deleteAccount } from "./contollers/AuthController";
+import { initializeDefaultCategories, fixExistingPostCategories } from "./contollers/PostController";
 
 // Import WebSocket server
 import ChatWebSocketServer from "./utils/websocket";
@@ -46,26 +47,26 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3002', 'http://localhost:3000'],
+  origin: ['http://localhost:3001', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Clerk middleware with error handling
-// try {
-//   app.use(clerkMiddleware());
-//   console.log('✅ Clerk middleware initialized successfully');
-// } catch (error) {
-//   console.error('❌ Failed to initialize Clerk middleware:', error);
-//   console.error('📝 Please check your CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY');
-//   process.exit(1);
-// }
+try {
+  app.use(clerkMiddleware());
+  console.log('✅ Clerk middleware initialized successfully');
+} catch (error) {
+  console.error('❌ Failed to initialize Clerk middleware:', error);
+  console.error('📝 Please check your CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY');
+  process.exit(1);
+}
 
 // Webhook endpoint for Clerk user sync
 app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-  
+
   if (!WEBHOOK_SECRET) {
     console.error('Missing CLERK_WEBHOOK_SECRET');
     return res.status(500).json({ error: 'Webhook secret not configured' });
@@ -102,7 +103,7 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
 
   if (eventType === 'user.created' || eventType === 'user.updated') {
     const email = email_addresses?.[0]?.email_address;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'No email found' });
     }
@@ -120,8 +121,8 @@ app.post('/webhook/clerk', express.raw({ type: 'application/json' }), async (req
           profile: {
             create: {
               userId: id,
-              name: attributes.first_name && attributes.last_name 
-                ? `${attributes.first_name} ${attributes.last_name}` 
+              name: attributes.first_name && attributes.last_name
+                ? `${attributes.first_name} ${attributes.last_name}`
                 : attributes.first_name || attributes.last_name || null,
               imageUrl: attributes.image_url || null,
             }
@@ -147,7 +148,7 @@ app.use('/api/chat', chatRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-    res.json({ status: "OK", timestamp: new Date().toISOString() });
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware
@@ -167,11 +168,17 @@ const chatWebSocket = new ChatWebSocketServer(server);
 // Make WebSocket server available globally
 (global as any).chatWebSocket = chatWebSocket;
 
-server.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
-    console.log(`🔌 WebSocket URL: ws://localhost:${PORT}`);
+server.listen(PORT, async () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+  console.log(`🔌 WebSocket URL: ws://localhost:${PORT}`);
+
+  // Initialize default categories
+  await initializeDefaultCategories();
+
+  // Fix existing posts that don't have proper category relationships
+  await fixExistingPostCategories();
 });
 
 export default prisma;

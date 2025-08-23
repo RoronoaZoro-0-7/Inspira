@@ -142,6 +142,14 @@ export default function ChatPage() {
       websocket.onopen = () => {
         console.log('WebSocket connected')
         setIsConnected(true)
+        
+        // Join the current conversation if one is selected
+        if (selectedConversation) {
+          websocket.send(JSON.stringify({
+            type: 'join',
+            data: { conversationId: selectedConversation.id }
+          }))
+        }
       }
       
       websocket.onmessage = (event) => {
@@ -171,6 +179,25 @@ export default function ChatPage() {
     }
   }
 
+  const updateConversationList = (newMessage: Message) => {
+    setConversations(prev => {
+      const newConversations = [...prev]
+      const conversationIndex = newConversations.findIndex(c => c.id === newMessage.conversationId)
+      if (conversationIndex !== -1) {
+        const conversation = newConversations[conversationIndex]
+        conversation.lastMessage = {
+          content: newMessage.content,
+          createdAt: newMessage.createdAt,
+          senderId: newMessage.senderId
+        }
+        conversation.updatedAt = newMessage.createdAt
+        newConversations.splice(conversationIndex, 1)
+        newConversations.unshift(conversation)
+      }
+      return newConversations
+    })
+  }
+
   // Handle WebSocket messages
   const handleWebSocketMessage = (data: any) => {
     switch (data.type) {
@@ -182,8 +209,7 @@ export default function ChatPage() {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
           }, 100)
         }
-        // Update conversation list with new message
-        fetchConversations()
+        updateConversationList(data.data)
         break
       case 'typing':
         // Handle typing indicators
@@ -196,7 +222,6 @@ export default function ChatPage() {
     }
   }
 
-  // Send message
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation) return
 
@@ -216,7 +241,7 @@ export default function ChatPage() {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
         }, 100)
         // Update conversation list
-        fetchConversations()
+        updateConversationList(newMessageData)
       } else {
         toast.error("Failed to send message")
       }
@@ -231,6 +256,14 @@ export default function ChatPage() {
     setSelectedConversation(conversation)
     fetchMessages(conversation.id)
     setIsMobileView(true)
+    
+    // Join the conversation via WebSocket
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'join',
+        data: { conversationId: conversation.id }
+      }))
+    }
   }
 
   // Format timestamp
@@ -267,8 +300,16 @@ export default function ChatPage() {
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation.id)
+      
+      // Join the conversation via WebSocket if connected
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'join',
+          data: { conversationId: selectedConversation.id }
+        }))
+      }
     }
-  }, [selectedConversation?.id])
+  }, [selectedConversation?.id, ws])
 
   // Search users
   const searchUsers = async (query: string) => {

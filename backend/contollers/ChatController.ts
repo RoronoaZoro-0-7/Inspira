@@ -11,11 +11,18 @@ export const getConversations = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const conversations = await prisma.chatConversation.findMany({
       where: {
         OR: [
-          { participant1Id: req.user.profile!.id },
-          { participant2Id: req.user.profile!.id }
+          { participant1Id: req.user.profile.id },
+          { participant2Id: req.user.profile.id }
         ]
       },
       include: {
@@ -53,7 +60,7 @@ export const getConversations = async (req: Request, res: Response) => {
 
     // Transform conversations to show the other participant
   const transformedConversations = conversations.map((conversation: any) => {
-      const isParticipant1 = conversation.participant1Id === req.user.profile!.id;
+      const isParticipant1 = conversation.participant1Id === req.user.profile.id;
       const otherParticipant = isParticipant1 ? conversation.participant2 : conversation.participant1;
       
       return {
@@ -89,6 +96,13 @@ export const getMessages = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const { conversationId } = req.params;
     const { page = '1', limit = '50' } = req.query;
     const pageNum = parseInt(page as string);
@@ -100,8 +114,8 @@ export const getMessages = async (req: Request, res: Response) => {
       where: {
         id: conversationId,
         OR: [
-          { participant1Id: req.user.profile!.id },
-          { participant2Id: req.user.profile!.id }
+          { participant1Id: req.user.profile.id },
+          { participant2Id: req.user.profile.id }
         ]
       }
     });
@@ -136,7 +150,7 @@ export const getMessages = async (req: Request, res: Response) => {
 
     // Mark messages as read if they're from the other participant
     const unreadMessages = messages.filter(
-      (msg: any) => msg.senderId !== req.user.profile!.id && !msg.isRead
+      (msg: any) => msg.senderId !== req.user.profile.id && !msg.isRead
     );
 
     if (unreadMessages.length > 0) {
@@ -182,6 +196,13 @@ export const sendMessage = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const { conversationId } = req.params;
     const { content, messageType = 'TEXT', fileUrl } = req.body;
 
@@ -197,8 +218,8 @@ export const sendMessage = async (req: Request, res: Response) => {
       where: {
         id: conversationId,
         OR: [
-          { participant1Id: req.user.profile!.id },
-          { participant2Id: req.user.profile!.id }
+          { participant1Id: req.user.profile.id },
+          { participant2Id: req.user.profile.id }
         ]
       }
     });
@@ -215,7 +236,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       const message = await tx.chatMessage.create({
         data: {
           conversationId,
-          senderId: req.user.profile!.id,
+          senderId: req.user.profile.id,
           content,
           messageType,
           fileUrl
@@ -272,6 +293,13 @@ export const createConversation = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const { participantId } = req.body;
 
     if (!participantId) {
@@ -281,7 +309,7 @@ export const createConversation = async (req: Request, res: Response) => {
       });
     }
 
-    if (participantId === req.user.profile!.id) {
+    if (participantId === req.user.profile.id) {
       return res.status(400).json({ 
         error: "Bad request", 
         message: "Cannot create conversation with yourself" 
@@ -293,12 +321,12 @@ export const createConversation = async (req: Request, res: Response) => {
       where: {
         OR: [
           {
-            participant1Id: req.user.profile!.id,
+            participant1Id: req.user.profile.id,
             participant2Id: participantId
           },
           {
             participant1Id: participantId,
-            participant2Id: req.user.profile!.id
+            participant2Id: req.user.profile.id
           }
         ]
       },
@@ -331,7 +359,7 @@ export const createConversation = async (req: Request, res: Response) => {
     if (!conversation) {
       conversation = await prisma.chatConversation.create({
         data: {
-          participant1Id: req.user.profile!.id,
+          participant1Id: req.user.profile.id,
           participant2Id: participantId
         },
         include: {
@@ -361,7 +389,7 @@ export const createConversation = async (req: Request, res: Response) => {
     }
 
     // Transform to show the other participant
-    const isParticipant1 = conversation!.participant1Id === req.user.profile!.id;
+    const isParticipant1 = conversation!.participant1Id === req.user.profile.id;
     const otherParticipant = isParticipant1 ? conversation!.participant2 : conversation!.participant1;
 
     res.json({
@@ -393,13 +421,20 @@ export const searchUsers = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const { q = '', page = '1', limit = '20' } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {
-      id: { not: req.user.profile!.id } // Exclude current user
+      id: { not: req.user.profile.id } // Exclude current user
     };
 
     if (q) {
@@ -461,6 +496,13 @@ export const markMessageAsRead = async (req: Request, res: Response) => {
       });
     }
 
+    if (!req.user.profile) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "User profile not found" 
+      });
+    }
+
     const { messageId } = req.params;
 
     const message = await prisma.chatMessage.findFirst({
@@ -468,8 +510,8 @@ export const markMessageAsRead = async (req: Request, res: Response) => {
         id: messageId,
         conversation: {
           OR: [
-            { participant1Id: req.user.profile!.id },
-            { participant2Id: req.user.profile!.id }
+            { participant1Id: req.user.profile.id },
+            { participant2Id: req.user.profile.id }
           ]
         }
       }
@@ -482,7 +524,7 @@ export const markMessageAsRead = async (req: Request, res: Response) => {
       });
     }
 
-    if (message.senderId === req.user.profile!.id) {
+    if (message.senderId === req.user.profile.id) {
       return res.status(400).json({ 
         error: "Bad request", 
         message: "Cannot mark your own message as read" 

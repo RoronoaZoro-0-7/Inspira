@@ -19,11 +19,11 @@ router.get('/user/:userId', getUserById);
 
 
 // Protected routes (require authentication)
-// router.use(requireAuth());
-// router.use();
+router.use(requireAuth());
+router.use(authMiddleware);
 
 // User profile
-router.get('/me',getCurrentUser);
+router.get('/me', getCurrentUser);
 router.put('/profile', updateProfile);
 
 // User content

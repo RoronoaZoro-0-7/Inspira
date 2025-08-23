@@ -12,9 +12,36 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       });
     }
 
+    // Get the user's profile from the database
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.user.clerkId },
+      include: {
+        user: {
+          select: {
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Not found",
+        message: "Profile not found"
+      });
+    }
+
     res.json({
       success: true,
-      user: req.user
+      data: {
+        profile: {
+          id: profile.id,
+          name: profile.name,
+          email: profile.user?.email,
+          credits: profile.credits,
+          imageUrl: profile.imageUrl
+        }
+      }
     });
   } catch (error) {
     console.error('Get current user error:', error);

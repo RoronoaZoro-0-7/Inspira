@@ -47,9 +47,19 @@ export const getPosts = async (req: Request, res: Response) => {
     // Build where clause
     const where: any = {};
     if (category) {
-      where.categoryIds = {
-        has: category as string
-      };
+      // First find the category by slug to get its ID
+      const categoryRecord = await prisma.category.findUnique({
+        where: { slug: category as string }
+      });
+      
+      if (categoryRecord) {
+        where.categoryIds = {
+          has: categoryRecord.id
+        };
+      } else {
+        // If category doesn't exist, return empty results
+        where.id = 'non-existent-id';
+      }
     }
 
     // Build order by clause
@@ -178,7 +188,14 @@ export const createPost = async (req: Request, res: Response) => {
     for (const name of categoryNames) {
       let category = await prisma.category.findUnique({ where: { slug: name } });
       if (!category) {
-        category = await prisma.category.create({ data: { slug: name, name } });
+        // Create category with proper name formatting
+        const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+        category = await prisma.category.create({ 
+          data: { 
+            slug: name, 
+            name: displayName 
+          } 
+        });
       }
       categoryIdsToStore.push(category.id);
     }
@@ -233,7 +250,7 @@ export const createPost = async (req: Request, res: Response) => {
       });
     }
 
-    // Step 1: Create the post
+    // Step 1: Create the post with proper category relationships
     const post = await prisma.post.create({
       data: {
         title,
@@ -241,7 +258,19 @@ export const createPost = async (req: Request, res: Response) => {
         categoryIds: categoryIdsToStore,
         imageUrls: uploadedImageUrls,
         videoUrls: uploadedVideoUrls,
-        authorId: userProfile.id
+        authorId: userProfile.id,
+        categories: {
+          connect: categoryIdsToStore.map(id => ({ id }))
+        }
+      },
+      include: {
+        categories: true,
+        author: {
+          select: {
+            name: true,
+            imageUrl: true
+          }
+        }
       }
     });
 
@@ -563,6 +592,143 @@ export const deletePost = async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Internal server error",
       message: "Failed to delete post"
+    });
+  }
+};
+
+// GET /posts/categories - Get category counts
+export const getCategoryCounts = async (req: Request, res: Response) => {
+  try {
+    // Define the categories we want to count
+    const categories = ['coding', 'design', 'business', 'writing', 'marketing'];
+    
+    const categoryCounts = await Promise.all(
+      categories.map(async (categorySlug) => {
+        // First, find the category by slug
+        const category = await prisma.category.findUnique({
+          where: { slug: categorySlug }
+        });
+        
+        if (!category) {
+          return {
+            name: categorySlug,
+            count: 0
+          };
+        }
+        
+        // Count posts that have this category ID in their categoryIds array
+        const count = await prisma.post.count({
+          where: {
+            categoryIds: {
+              has: category.id
+            }
+          }
+        });
+        
+        return {
+          name: categorySlug,
+          count
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        categories: categoryCounts
+      }
+    });
+  } catch (error) {
+    console.error('Get category counts error:', error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: "Failed to get category counts"
+    });
+  }
+};
+
+// Initialize default categories
+export const initializeDefaultCategories = async () => {
+  try {
+    const defaultCategories = [
+      { slug: 'coding', name: 'Coding' },
+      { slug: 'design', name: 'Design' },
+      { slug: 'business', name: 'Business' },
+      { slug: 'writing', name: 'Writing' },
+      { slug: 'marketing', name: 'Marketing' }
+    ];
+
+    for (const category of defaultCategories) {
+      await prisma.category.upsert({
+        where: { slug: category.slug },
+        update: {},
+        create: {
+          slug: category.slug,
+          name: category.name
+        }
+      });
+    }
+
+    console.log('✅ Default categories initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize default categories:', error);
+  }
+};
+
+// Fix existing posts that don't have proper category relationships
+export const fixExistingPostCategories = async () => {
+  try {
+    // Get all posts that have categoryIds
+    const posts = await prisma.post.findMany({
+      where: {
+        categoryIds: {
+          isEmpty: false
+        }
+      },
+      include: {
+        categories: true
+      }
+    });
+
+    let fixedCount = 0;
+    for (const post of posts) {
+      if (post.categories.length === 0 && post.categoryIds.length > 0) {
+        // Connect the categories
+        await prisma.post.update({
+          where: { id: post.id },
+          data: {
+            categories: {
+              connect: post.categoryIds.map(id => ({ id }))
+            }
+          }
+        });
+        fixedCount++;
+      }
+    }
+
+    if (fixedCount > 0) {
+      console.log(`✅ Fixed category relationships for ${fixedCount} posts`);
+    } else {
+      console.log('✅ All posts already have proper category relationships');
+    }
+  } catch (error) {
+    console.error('❌ Failed to fix existing post categories:', error);
+  }
+};
+
+// Manual fix endpoint for category relationships
+export const manualFixCategories = async (req: Request, res: Response) => {
+  try {
+    await fixExistingPostCategories();
+    res.json({
+      success: true,
+      message: "Category relationships fixed successfully"
+    });
+  } catch (error) {
+    console.error('Manual fix categories error:', error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: "Failed to fix category relationships"
     });
   }
 };

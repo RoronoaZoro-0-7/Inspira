@@ -205,24 +205,24 @@ class ChatWebSocketServer {
   private async handleMessage(profileId: string, message: WebSocketMessage, isAuthenticated: boolean) {
     console.log(`Handling message from ${profileId} (${isAuthenticated ? 'authenticated' : 'test user'}):`, message);
     
-    // For test users, just log the message and send a confirmation
-    if (!isAuthenticated) {
-      console.log(`Test user ${profileId} sent message:`, message);
-      
-      // Send confirmation back to test user
-      const ws = this.clients.get(profileId);
-      if (ws) {
-        ws.send(JSON.stringify({
-          type: 'message_received',
-          data: {
-            originalMessage: message,
-            timestamp: new Date().toISOString(),
-            status: 'processed',
-            note: 'Test user - message logged only'
-          }
-        }));
-      }
-      return;
+    // Handle all message types regardless of authentication status
+    switch (message.type) {
+      case 'join':
+        await this.handleJoinConversation(profileId, message.data.conversationId);
+        break;
+      case 'leave':
+        await this.handleLeaveConversation(profileId, message.data.conversationId);
+        break;
+      case 'typing':
+        await this.handleTyping(profileId, message.data);
+        break;
+      case 'read':
+        if (isAuthenticated) {
+          await this.handleMarkAsRead(profileId, message.data);
+        }
+        break;
+      default:
+        console.warn(`Unknown message type: ${message.type}`);
     }
 
     // For authenticated users, process normally
@@ -245,7 +245,17 @@ class ChatWebSocketServer {
   }
 
   private async handleJoinConversation(profileId: string, conversationId: string) {
-    // Verify user is part of this conversation
+    // For test users, allow joining any conversation
+    if (profileId.startsWith('test-user-')) {
+      const userConversations = this.userConversations.get(profileId);
+      if (userConversations) {
+        userConversations.add(conversationId);
+      }
+      console.log(`Test user ${profileId} joined conversation ${conversationId}`);
+      return;
+    }
+
+    // Verify authenticated user is part of this conversation
     const conversation = await prisma.chatConversation.findFirst({
       where: {
         id: conversationId,
@@ -344,12 +354,26 @@ class ChatWebSocketServer {
     if (conversation) {
       const participants = [conversation.participant1Id, conversation.participant2Id];
       
+      // Send to all participants except sender
       participants.forEach(participantId => {
         if (participantId !== message.senderId) {
           this.sendToUser(participantId, {
             type: 'new_message',
             data: message
           });
+        }
+      });
+      
+      // Also broadcast to all test users who have joined this conversation
+      this.clients.forEach((ws, profileId) => {
+        if (profileId.startsWith('test-user-')) {
+          const userConversations = this.userConversations.get(profileId);
+          if (userConversations?.has(message.conversationId)) {
+            ws.send(JSON.stringify({
+              type: 'new_message',
+              data: message
+            }));
+          }
         }
       });
     }
