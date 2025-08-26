@@ -9,7 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// If you use shadcn/ui or Radix UI, use the following import:
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select"
+// If you do not have these components, run:
+// npx shadcn-ui@latest add select
 import { Input } from "@/components/ui/input"
 import { MessageSquare, ArrowUp, Clock, CheckCircle, Filter, Plus, Loader2, Search } from "lucide-react"
 import Link from "next/link"
