@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://skill-share-micro-economy-2.onrender.com';
 
 export interface CreatePostData {
   title: string;
